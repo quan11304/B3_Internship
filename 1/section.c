@@ -22,7 +22,13 @@ void debug (unsigned char *array) {
 	}
 }
 
-
+//char *getaddr(unsigned char *input, int size, int offset) {
+//	fseek(f,offset,SEEK_SET);
+//	fread(input,1,DWORD,f);
+//	char *str = malloc(size+1);
+//	sprintf(str, "%x", * (uint32_t *) input);
+//	return str;
+//}
 
 int main(int argc, char* argv[]) {
 	// argv[1] = Path to executable
@@ -35,7 +41,8 @@ int main(int argc, char* argv[]) {
 		end(1);
 	}
 	
-	unsigned char lfanew[DWORDL];
+//	unsigned char lfanew[DWORDL];
+//	lfanew_str = getaddr(lfanew, DWORDL, 0x3C);
 	fseek(f, 0x3C, SEEK_SET);
 	fread(lfanew,1,DWORD,f);
 	char lfanew_str[DWORDL];
