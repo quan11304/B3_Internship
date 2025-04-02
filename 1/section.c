@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define BYTE 1
-#define WORD 2
-#define DWORD 4
+#define BYTE 1		// Corresponds to char
+#define WORD 2		// Corresponds to short
+#define DWORD 4		// Corresponds to long
 #define BYTEL 2
 #define WORDL 3
 #define DWORDL 5
@@ -26,14 +26,14 @@ void debug (uchar *array, int size) {
 	printf("\n");
 }
 
-unsigned int getaddr(int size, int offset) {
+unsigned long getval(int size, int offset) {
 	uchar input[size];
 	fseek(f,offset,SEEK_SET);
 	fread(input,1,DWORD,f);
 	debug(input, size);
 	
 	// Convert from hex array to int
-	unsigned int var = 0;
+	unsigned long var = 0;
 	for(int i=0;i<size;i++) {
 		var = var | input[i]<<(i*8);
 	}
@@ -59,7 +59,19 @@ int main(int argc, char* argv[]) {
 		end(1);
 	}
 	
-	unsigned int lfanew = getaddr(DWORD, 0x3C);
+	unsigned long lfanew = getval(DWORD, 0x3C);
+	
+	unsigned short no_sections = getval(WORD, lfanew + 6);
+	
+	unsigned long optional = lfanew + 24;
+		
+	unsigned long entry = getval(DWORD, optional + 16);
+	
+	// 0Bh 01h => optional_magic = 267 => 32-bit
+	// 0Bh 02h => optional_magic = 523 => 64-bit
+	unsigned short optional_magic = getval (WORD, optional);
+	
+	printf("%lu %u %lu %lu %u", lfanew, no_sections, optional, entry, optional_magic);
 	
 	end(0);
 }
