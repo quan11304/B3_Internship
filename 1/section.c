@@ -8,51 +8,58 @@
 #define WORDL 3
 #define DWORDL 5
 
+typedef unsigned char uchar;
+
 FILE *f;
 
 int end(int status) {
+	// To close the file stream before terminating the programme
 	fclose(f);
 	printf("\n");
 	exit(status);
 }
 
-void debug (unsigned char *array) {
-	for (int i = 0; i<DWORD; i++){
-		printf("%02x\n",array[i]);
+void debug (uchar *array, int size) {
+	for (int i = 0; i<size; i++){
+		printf("%02x ",array[i]);
 	}
+	printf("\n");
 }
 
-//char *getaddr(unsigned char *input, int size, int offset) {
-//	fseek(f,offset,SEEK_SET);
-//	fread(input,1,DWORD,f);
-//	char *str = malloc(size+1);
-//	sprintf(str, "%x", * (uint32_t *) input);
-//	return str;
-//}
+unsigned int getaddr(int size, int offset) {
+	uchar input[size];
+	fseek(f,offset,SEEK_SET);
+	fread(input,1,DWORD,f);
+	debug(input, size);
+	
+	// Convert from hex array to int
+	unsigned int var = 0;
+	for(int i=0;i<size;i++) {
+		var = var | input[i]<<(i*8);
+	}
+	return var;
+}
 
 int main(int argc, char* argv[]) {
+	if (argc < 2) {
+		printf("Missing argument.\n");
+		printf("Usage: ./section path/to/PE/executable (Linux)\n");
+		printf("       section path\\to\\PE\\executable (Windows)\n");
+		exit(1);
+	}
+
 	// argv[1] = Path to executable
 	f = fopen(argv[1],"rb");
 	
-	unsigned char magic[WORDL];
+	// Verify magic byte
+	uchar magic[WORDL];
 	fread(magic,1,WORD,f);
 	if (strcmp(magic,"MZ") != 0) {
 		printf("Input error. File is not a PE executable.");
 		end(1);
 	}
 	
-//	unsigned char lfanew[DWORDL];
-//	lfanew_str = getaddr(lfanew, DWORDL, 0x3C);
-	fseek(f, 0x3C, SEEK_SET);
-	fread(lfanew,1,DWORD,f);
-	char lfanew_str[DWORDL];
-	sprintf(lfanew_str, "%x", * (uint32_t *) lfanew);
+	unsigned int lfanew = getaddr(DWORD, 0x3C);
 	
-
-	
-	char sig[DWORD];
-//	fseek()
-	
-	
-	end(1);
+	end(0);
 }
