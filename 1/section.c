@@ -1,119 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define db 1		// Corresponds to char
-#define dw 2		// Corresponds to short
-#define dd 4		// Corresponds to long
-#define dbl 2
-#define dwl 3
-#define ddl 5
-#define IMAGE_SIZEOF_SHORT_NAME 8
-
-typedef unsigned char BYTE;
-typedef unsigned short WORD;
-typedef unsigned long DWORD;
-
-// Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
-typedef struct _IMAGE_DATA_DIRECTORY {
-    DWORD VirtualAddress;
-    DWORD Size;
-} IMAGE_DATA_DIRECTORY;
-
-// Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_file_header
-typedef struct _IMAGE_FILE_HEADER {
-    WORD Machine;
-    WORD NumberOfSections;
-    DWORD TimeDateStamp;
-    DWORD PointerToSymbolTable;
-    DWORD NumberOfSymbols;
-    WORD SizeOfOptionalHeader;
-    WORD Characteristics;
-} IMAGE_FILE_HEADER;
-
-// Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_optional_header32
-typedef struct _IMAGE_OPTIONAL_HEADER32 {
-    WORD Magic;
-    BYTE MajorLinkerVersion;
-    BYTE MinorLinkerVersion;
-    DWORD SizeOfCode;
-    DWORD SizeOfInitializedData;
-    DWORD SizeOfUninitializedData;
-    DWORD AddressOfEntryPoint;
-    DWORD BaseOfCode;
-    DWORD BaseOfData;
-    DWORD ImageBase;
-    DWORD SectionAlignment;
-    DWORD FileAlignment;
-    WORD MajorOperatingSystemVersion;
-    WORD MinorOperatingSystemVersion;
-    WORD MajorImageVersion;
-    WORD MinorImageVersion;
-    WORD MajorSubsystemVersion;
-    WORD MinorSubsystemVersion;
-    DWORD Win32VersionValue;
-    DWORD SizeOfImage;
-    DWORD SizeOfHeaders;
-    DWORD CheckSum;
-    WORD Subsystem;
-    WORD DllCharacteristics;
-    DWORD SizeOfStackReserve;
-    DWORD SizeOfStackCommit;
-    DWORD SizeOfHeapReserve;
-    DWORD SizeOfHeapCommit;
-    DWORD LoaderFlags;
-    DWORD NumberOfRvaAndSizes;
-    IMAGE_DATA_DIRECTORY DataDirectory[16];
-} IMAGE_OPTIONAL_HEADER32;
-
-// Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_optional_header64
-typedef struct _IMAGE_OPTIONAL_HEADER64 {
-    WORD Magic;
-    BYTE MajorLinkerVersion;
-    BYTE MinorLinkerVersion;
-    DWORD SizeOfCode;
-    DWORD SizeOfInitializedData;
-    DWORD SizeOfUninitializedData;
-    DWORD AddressOfEntryPoint;
-    DWORD BaseOfCode;
-    unsigned long long ImageBase;
-    DWORD SectionAlignment;
-    DWORD FileAlignment;
-    WORD MajorOperatingSystemVersion;
-    WORD MinorOperatingSystemVersion;
-    WORD MajorImageVersion;
-    WORD MinorImageVersion;
-    WORD MajorSubsystemVersion;
-    WORD MinorSubsystemVersion;
-    DWORD Win32VersionValue;
-    DWORD SizeOfImage;
-    DWORD SizeOfHeaders;
-    DWORD CheckSum;
-    WORD Subsystem;
-    WORD DllCharacteristics;
-    unsigned long long SizeOfStackReserve;
-    unsigned long long SizeOfStackCommit;
-    unsigned long long SizeOfHeapReserve;
-    unsigned long long SizeOfHeapCommit;
-    DWORD LoaderFlags;
-    DWORD NumberOfRvaAndSizes;
-    IMAGE_DATA_DIRECTORY DataDirectory[16];
-} IMAGE_OPTIONAL_HEADER64;
-
-typedef struct _IMAGE_SECTION_HEADER {
-    BYTE  Name[IMAGE_SIZEOF_SHORT_NAME+1];
-    union {
-        DWORD PhysicalAddress;
-        DWORD VirtualSize;
-    } Misc;
-    DWORD VirtualAddress;
-    DWORD SizeOfRawData;
-    DWORD PointerToRawData;
-    DWORD PointerToRelocations;
-    DWORD PointerToLinenumbers;
-    WORD  NumberOfRelocations;
-    WORD  NumberOfLinenumbers;
-    DWORD Characteristics;
-} IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
+#include "struct.h"
+#include "debug.c"
 
 FILE *f;
 
@@ -140,13 +29,6 @@ DWORD getval(int size, int offset) {
     fread(input, 1,dd, f);
 
     hextoint(input, size);
-}
-
-void debug(unsigned char *array, int size) {
-    for (int i = 0; i < size; i++) {
-        printf("%02x ", array[i]);
-    }
-    printf("\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -447,24 +329,26 @@ int main(int argc, char *argv[]) {
 
         for (int i = 0; i < ifh.NumberOfSections; ++i) {
             printf("\n");
-            fread(section[i].Name,1,IMAGE_SIZEOF_SHORT_NAME,f);
+            fread(section[i].Name, 1,IMAGE_SIZEOF_SHORT_NAME, f);
             section[i].Name[IMAGE_SIZEOF_SHORT_NAME] = 0;
             printf("%-30s | %-11s | %-#11llx\n", section[i].Name,
-                "", hextoint(section[i].Name, IMAGE_SIZEOF_SHORT_NAME+1));
+                   "", hextoint(section[i].Name, IMAGE_SIZEOF_SHORT_NAME + 1));
 
             // Either PhysicalAddress or VirtualSize
             BYTE PhysicalAddress[ddl];
             fread(PhysicalAddress, 1, dd, f);
             PhysicalAddress[dd] = 0;
             section[i].Misc.PhysicalAddress = hextoint(PhysicalAddress, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PhysicalAddress/VirtualSize", section[i].Misc.PhysicalAddress, section[i].Misc.PhysicalAddress);
+            printf("%-30s | %-11lu | %-#11lx\n", "PhysicalAddress/VirtualSize", section[i].Misc.PhysicalAddress,
+                   section[i].Misc.PhysicalAddress);
 
 
             BYTE VirtualAddress[ddl];
             fread(VirtualAddress, 1, dd, f);
             VirtualAddress[dd] = 0;
             section[i].VirtualAddress = hextoint(VirtualAddress, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "VirtualAddress", section[i].VirtualAddress, section[i].VirtualAddress);
+            printf("%-30s | %-11lu | %-#11lx\n", "VirtualAddress", section[i].VirtualAddress,
+                   section[i].VirtualAddress);
 
             BYTE SizeOfRawData[ddl];
             fread(SizeOfRawData, 1, dd, f);
@@ -476,37 +360,43 @@ int main(int argc, char *argv[]) {
             fread(PointerToRawData, 1, dd, f);
             PointerToRawData[dd] = 0;
             section[i].PointerToRawData = hextoint(PointerToRawData, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRawData", section[i].PointerToRawData, section[i].PointerToRawData);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRawData", section[i].PointerToRawData,
+                   section[i].PointerToRawData);
 
             BYTE PointerToRelocations[ddl];
             fread(PointerToRelocations, 1, dd, f);
             PointerToRelocations[dd] = 0;
             section[i].PointerToRelocations = hextoint(PointerToRelocations, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRelocations", section[i].PointerToRelocations, section[i].PointerToRelocations);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRelocations", section[i].PointerToRelocations,
+                   section[i].PointerToRelocations);
 
             BYTE PointerToLinenumbers[ddl];
             fread(PointerToLinenumbers, 1, dd, f);
             PointerToLinenumbers[dd] = 0;
             section[i].PointerToLinenumbers = hextoint(PointerToLinenumbers, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PointerToLinenumbers", section[i].PointerToLinenumbers, section[i].PointerToLinenumbers);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToLinenumbers", section[i].PointerToLinenumbers,
+                   section[i].PointerToLinenumbers);
 
             BYTE NumberOfRelocations[dwl];
             fread(NumberOfRelocations, 1, dw, f);
             NumberOfRelocations[dw] = 0;
             section[i].NumberOfRelocations = (WORD) hextoint(NumberOfRelocations, dwl);
-            printf("%-30s | %-11u | %-#11x\n", "NumberOfRelocations", section[i].NumberOfRelocations, section[i].NumberOfRelocations);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfRelocations", section[i].NumberOfRelocations,
+                   section[i].NumberOfRelocations);
 
             BYTE NumberOfLinenumbers[dwl];
             fread(NumberOfLinenumbers, 1, dw, f);
             NumberOfLinenumbers[dw] = 0;
             section[i].NumberOfLinenumbers = (WORD) hextoint(NumberOfLinenumbers, dwl);
-            printf("%-30s | %-11u | %-#11x\n", "NumberOfLinenumbers", section[i].NumberOfLinenumbers, section[i].NumberOfLinenumbers);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfLinenumbers", section[i].NumberOfLinenumbers,
+                   section[i].NumberOfLinenumbers);
 
             BYTE characteristics[ddl];
             fread(characteristics, 1, dd, f);
             characteristics[dd] = 0;
             section[i].Characteristics = hextoint(characteristics, dd);
-            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics, section[i].Characteristics);
+            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics,
+                   section[i].Characteristics);
         }
     } else if (_Magic == 523) {
         IMAGE_OPTIONAL_HEADER64 ioh;
@@ -710,24 +600,26 @@ int main(int argc, char *argv[]) {
 
         for (int i = 0; i < ifh.NumberOfSections; ++i) {
             printf("\n");
-            fread(section[i].Name,1,IMAGE_SIZEOF_SHORT_NAME,f);
+            fread(section[i].Name, 1,IMAGE_SIZEOF_SHORT_NAME, f);
             section[i].Name[IMAGE_SIZEOF_SHORT_NAME] = 0;
             printf("%-30s | %-11s | %-#11llx\n", section[i].Name,
-                "", hextoint(section[i].Name, IMAGE_SIZEOF_SHORT_NAME+1));
+                   "", hextoint(section[i].Name, IMAGE_SIZEOF_SHORT_NAME + 1));
 
             // Either PhysicalAddress or VirtualSize
             BYTE PhysicalAddress[ddl];
             fread(PhysicalAddress, 1, dd, f);
             PhysicalAddress[dd] = 0;
             section[i].Misc.PhysicalAddress = hextoint(PhysicalAddress, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PhysicalAddress/VirtualSize", section[i].Misc.PhysicalAddress, section[i].Misc.PhysicalAddress);
+            printf("%-30s | %-11lu | %-#11lx\n", "PhysicalAddress/VirtualSize", section[i].Misc.PhysicalAddress,
+                   section[i].Misc.PhysicalAddress);
 
 
             BYTE VirtualAddress[ddl];
             fread(VirtualAddress, 1, dd, f);
             VirtualAddress[dd] = 0;
             section[i].VirtualAddress = hextoint(VirtualAddress, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "VirtualAddress", section[i].VirtualAddress, section[i].VirtualAddress);
+            printf("%-30s | %-11lu | %-#11lx\n", "VirtualAddress", section[i].VirtualAddress,
+                   section[i].VirtualAddress);
 
             BYTE SizeOfRawData[ddl];
             fread(SizeOfRawData, 1, dd, f);
@@ -739,37 +631,43 @@ int main(int argc, char *argv[]) {
             fread(PointerToRawData, 1, dd, f);
             PointerToRawData[dd] = 0;
             section[i].PointerToRawData = hextoint(PointerToRawData, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRawData", section[i].PointerToRawData, section[i].PointerToRawData);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRawData", section[i].PointerToRawData,
+                   section[i].PointerToRawData);
 
             BYTE PointerToRelocations[ddl];
             fread(PointerToRelocations, 1, dd, f);
             PointerToRelocations[dd] = 0;
             section[i].PointerToRelocations = hextoint(PointerToRelocations, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRelocations", section[i].PointerToRelocations, section[i].PointerToRelocations);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRelocations", section[i].PointerToRelocations,
+                   section[i].PointerToRelocations);
 
             BYTE PointerToLinenumbers[ddl];
             fread(PointerToLinenumbers, 1, dd, f);
             PointerToLinenumbers[dd] = 0;
             section[i].PointerToLinenumbers = hextoint(PointerToLinenumbers, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "PointerToLinenumbers", section[i].PointerToLinenumbers, section[i].PointerToLinenumbers);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToLinenumbers", section[i].PointerToLinenumbers,
+                   section[i].PointerToLinenumbers);
 
             BYTE NumberOfRelocations[dwl];
             fread(NumberOfRelocations, 1, dw, f);
             NumberOfRelocations[dw] = 0;
             section[i].NumberOfRelocations = (WORD) hextoint(NumberOfRelocations, dwl);
-            printf("%-30s | %-11u | %-#11x\n", "NumberOfRelocations", section[i].NumberOfRelocations, section[i].NumberOfRelocations);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfRelocations", section[i].NumberOfRelocations,
+                   section[i].NumberOfRelocations);
 
             BYTE NumberOfLinenumbers[dwl];
             fread(NumberOfLinenumbers, 1, dw, f);
             NumberOfLinenumbers[dw] = 0;
             section[i].NumberOfLinenumbers = (WORD) hextoint(NumberOfLinenumbers, dwl);
-            printf("%-30s | %-11u | %-#11x\n", "NumberOfLinenumbers", section[i].NumberOfLinenumbers, section[i].NumberOfLinenumbers);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfLinenumbers", section[i].NumberOfLinenumbers,
+                   section[i].NumberOfLinenumbers);
 
             BYTE characteristics[ddl];
             fread(characteristics, 1, dd, f);
             characteristics[dd] = 0;
             section[i].Characteristics = hextoint(characteristics, dd);
-            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics, section[i].Characteristics);
+            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics,
+                   section[i].Characteristics);
         }
     } else {
         printf("Invalid magic in optional header.");
