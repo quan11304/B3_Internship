@@ -100,7 +100,7 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
 } IMAGE_OPTIONAL_HEADER64;
 
 typedef struct _IMAGE_SECTION_HEADER {
-    BYTE  Name[IMAGE_SIZEOF_SHORT_NAME];
+    BYTE  Name[IMAGE_SIZEOF_SHORT_NAME+1];
     union {
         DWORD PhysicalAddress;
         DWORD VirtualSize;
@@ -128,7 +128,8 @@ unsigned long long hextoint(BYTE *input, int size) {
     // Convert from hex array to int
     unsigned long long var = 0;
     for (int i = 0; i < size; i++) {
-        var = var | input[i] << (i * 8);
+        unsigned long long temp = input[i];
+        var = var | temp << (i * 8);
     }
     return var;
 }
@@ -234,11 +235,8 @@ int main(int argc, char *argv[]) {
         "Export", "Import", "Resource", "Exception", "Security", "Basereloc", "Debug", "Copyright", "GlobalPtr", "TLS",
         "Load_Config", "Bound_Import", "IAT", "Delay_Import", "COM_Descriptor", "Reserved"
     };
-    // printf("\n");
-    // for (int i = 0; i < 16; ++i) {
-    //     printf("%s ", " woo" + datadir[i]);
-    // }
-    // printf("\n");
+
+    IMAGE_SECTION_HEADER section[ifh.NumberOfSections];
 
     if (_Magic == 267) {
         IMAGE_OPTIONAL_HEADER32 ioh;
@@ -425,6 +423,7 @@ int main(int argc, char *argv[]) {
         ioh.NumberOfRvaAndSizes = hextoint(NumberOfRvaAndSizes, ddl);
         printf("%-30s | %-11lu | %-#11lx\n", "NumberOfRvaAndSizes", ioh.NumberOfRvaAndSizes, ioh.NumberOfRvaAndSizes);
 
+        // Data Directories
         for (int i = 0; i < 16; ++i) {
             char field[strlen(datadir[i]) + strlen(" VirtualAddress")];
 
@@ -434,7 +433,7 @@ int main(int argc, char *argv[]) {
             ioh.DataDirectory[i].VirtualAddress = hextoint(VirtualAddress, ddl);
             strcpy(field, datadir[i]);
             strcat(field, " VirtualAddress");
-            printf("%-30s | %-11lu | %-#11lx\n", strcat(datadir[i]," VirtualAddress"),
+            printf("%-30s | %-11lu | %-#11lx\n", field,
                    ioh.DataDirectory[i].VirtualAddress, ioh.DataDirectory[i].VirtualAddress);
 
             BYTE Size[ddl];
@@ -443,7 +442,71 @@ int main(int argc, char *argv[]) {
             strcpy(field, datadir[i]);
             strcat(field, " Size");
             ioh.DataDirectory[i].Size = hextoint(Size, ddl);
-            printf("%-30s | %-11lu | %-#11lx\n", "Size", ioh.DataDirectory[i].Size, ioh.DataDirectory[i].Size);
+            printf("%-30s | %-11lu | %-#11lx\n", field, ioh.DataDirectory[i].Size, ioh.DataDirectory[i].Size);
+        }
+
+        for (int i = 0; i < ifh.NumberOfSections; ++i) {
+            printf("\n");
+            fread(section[i].Name,1,IMAGE_SIZEOF_SHORT_NAME,f);
+            section[i].Name[IMAGE_SIZEOF_SHORT_NAME] = 0;
+            printf("%-30s | %-11s | %-#11llx\n", section[i].Name,
+                "", hextoint(section[i].Name, IMAGE_SIZEOF_SHORT_NAME+1));
+
+            // Either PhysicalAddress or VirtualSize
+            BYTE PhysicalAddress[ddl];
+            fread(PhysicalAddress, 1, dd, f);
+            PhysicalAddress[dd] = 0;
+            section[i].Misc.PhysicalAddress = hextoint(PhysicalAddress, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PhysicalAddress/VirtualSize", section[i].Misc.PhysicalAddress, section[i].Misc.PhysicalAddress);
+
+
+            BYTE VirtualAddress[ddl];
+            fread(VirtualAddress, 1, dd, f);
+            VirtualAddress[dd] = 0;
+            section[i].VirtualAddress = hextoint(VirtualAddress, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "VirtualAddress", section[i].VirtualAddress, section[i].VirtualAddress);
+
+            BYTE SizeOfRawData[ddl];
+            fread(SizeOfRawData, 1, dd, f);
+            SizeOfRawData[dd] = 0;
+            section[i].SizeOfRawData = hextoint(SizeOfRawData, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "SizeOfRawData", section[i].SizeOfRawData, section[i].SizeOfRawData);
+
+            BYTE PointerToRawData[ddl];
+            fread(PointerToRawData, 1, dd, f);
+            PointerToRawData[dd] = 0;
+            section[i].PointerToRawData = hextoint(PointerToRawData, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRawData", section[i].PointerToRawData, section[i].PointerToRawData);
+
+            BYTE PointerToRelocations[ddl];
+            fread(PointerToRelocations, 1, dd, f);
+            PointerToRelocations[dd] = 0;
+            section[i].PointerToRelocations = hextoint(PointerToRelocations, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRelocations", section[i].PointerToRelocations, section[i].PointerToRelocations);
+
+            BYTE PointerToLinenumbers[ddl];
+            fread(PointerToLinenumbers, 1, dd, f);
+            PointerToLinenumbers[dd] = 0;
+            section[i].PointerToLinenumbers = hextoint(PointerToLinenumbers, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToLinenumbers", section[i].PointerToLinenumbers, section[i].PointerToLinenumbers);
+
+            BYTE NumberOfRelocations[dwl];
+            fread(NumberOfRelocations, 1, dw, f);
+            NumberOfRelocations[dw] = 0;
+            section[i].NumberOfRelocations = (WORD) hextoint(NumberOfRelocations, dwl);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfRelocations", section[i].NumberOfRelocations, section[i].NumberOfRelocations);
+
+            BYTE NumberOfLinenumbers[dwl];
+            fread(NumberOfLinenumbers, 1, dw, f);
+            NumberOfLinenumbers[dw] = 0;
+            section[i].NumberOfLinenumbers = (WORD) hextoint(NumberOfLinenumbers, dwl);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfLinenumbers", section[i].NumberOfLinenumbers, section[i].NumberOfLinenumbers);
+
+            BYTE characteristics[ddl];
+            fread(characteristics, 1, dd, f);
+            characteristics[dd] = 0;
+            section[i].Characteristics = hextoint(characteristics, dd);
+            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics, section[i].Characteristics);
         }
     } else if (_Magic == 523) {
         IMAGE_OPTIONAL_HEADER64 ioh;
@@ -494,10 +557,10 @@ int main(int argc, char *argv[]) {
         ioh.BaseOfCode = hextoint(BaseOfCode, ddl);
         printf("%-30s | %-11lu | %-#11lx\n", "BaseOfCode", ioh.BaseOfCode, ioh.BaseOfCode);
 
-        BYTE ImageBase[16 + 1];
-        fread(ImageBase, 1, 16, f);
-        ImageBase[16] = 0;
-        ioh.ImageBase = hextoint(ImageBase, 16 + 1);
+        BYTE ImageBase[8 + 1];
+        fread(ImageBase, 1, 8, f);
+        ImageBase[8] = 0;
+        ioh.ImageBase = hextoint(ImageBase, 8 + 1);
         printf("%-30s | %-11llu | %-#11llx\n", "ImageBase", ioh.ImageBase, ioh.ImageBase);
 
         BYTE SectionAlignment[ddl];
@@ -588,28 +651,28 @@ int main(int argc, char *argv[]) {
         ioh.DllCharacteristics = (WORD) hextoint(DllCharacteristics, dwl);
         printf("%-30s | %-11u | %-#11x\n", "DllCharacteristics", ioh.DllCharacteristics, ioh.DllCharacteristics);
 
-        BYTE SizeOfStackReserve[16 + 1];
-        fread(SizeOfStackReserve, 1, 16, f);
-        SizeOfStackReserve[16] = 0;
-        ioh.SizeOfStackReserve = hextoint(SizeOfStackReserve, 16 + 1);
+        BYTE SizeOfStackReserve[8 + 1];
+        fread(SizeOfStackReserve, 1, 8, f);
+        SizeOfStackReserve[8] = 0;
+        ioh.SizeOfStackReserve = hextoint(SizeOfStackReserve, 8 + 1);
         printf("%-30s | %-11llu | %-#11llx\n", "SizeOfStackReserve", ioh.SizeOfStackReserve, ioh.SizeOfStackReserve);
 
-        BYTE SizeOfStackCommit[16 + 1];
-        fread(SizeOfStackCommit, 1, 16, f);
-        SizeOfStackCommit[16] = 0;
-        ioh.SizeOfStackCommit = hextoint(SizeOfStackCommit, 16 + 1);
+        BYTE SizeOfStackCommit[8 + 1];
+        fread(SizeOfStackCommit, 1, 8, f);
+        SizeOfStackCommit[8] = 0;
+        ioh.SizeOfStackCommit = hextoint(SizeOfStackCommit, 8 + 1);
         printf("%-30s | %-11llu | %-#11llx\n", "SizeOfStackCommit", ioh.SizeOfStackCommit, ioh.SizeOfStackCommit);
 
-        BYTE SizeOfHeapReserve[16 + 1];
-        fread(SizeOfHeapReserve, 1, 16, f);
-        SizeOfHeapReserve[16] = 0;
-        ioh.SizeOfHeapReserve = hextoint(SizeOfHeapReserve, 16 + 1);
+        BYTE SizeOfHeapReserve[8 + 1];
+        fread(SizeOfHeapReserve, 1, 8, f);
+        SizeOfHeapReserve[8] = 0;
+        ioh.SizeOfHeapReserve = hextoint(SizeOfHeapReserve, 8 + 1);
         printf("%-30s | %-11llu | %-#11llx\n", "SizeOfHeapReserve", ioh.SizeOfHeapReserve, ioh.SizeOfHeapReserve);
 
-        BYTE SizeOfHeapCommit[16 + 1];
-        fread(SizeOfHeapCommit, 1, 16, f);
-        SizeOfHeapCommit[16] = 0;
-        ioh.SizeOfHeapCommit = hextoint(SizeOfHeapCommit, 16 + 1);
+        BYTE SizeOfHeapCommit[8 + 1];
+        fread(SizeOfHeapCommit, 1, 8, f);
+        SizeOfHeapCommit[8] = 0;
+        ioh.SizeOfHeapCommit = hextoint(SizeOfHeapCommit, 8 + 1);
         printf("%-30s | %-11llu | %-#11llx\n", "SizeOfHeapCommit", ioh.SizeOfHeapCommit, ioh.SizeOfHeapCommit);
 
         BYTE LoaderFlags[ddl];
@@ -644,29 +707,93 @@ int main(int argc, char *argv[]) {
             ioh.DataDirectory[i].Size = hextoint(Size, ddl);
             printf("%-30s | %-11lu | %-#11lx\n", field, ioh.DataDirectory[i].Size, ioh.DataDirectory[i].Size);
         }
+
+        for (int i = 0; i < ifh.NumberOfSections; ++i) {
+            printf("\n");
+            fread(section[i].Name,1,IMAGE_SIZEOF_SHORT_NAME,f);
+            section[i].Name[IMAGE_SIZEOF_SHORT_NAME] = 0;
+            printf("%-30s | %-11s | %-#11llx\n", section[i].Name,
+                "", hextoint(section[i].Name, IMAGE_SIZEOF_SHORT_NAME+1));
+
+            // Either PhysicalAddress or VirtualSize
+            BYTE PhysicalAddress[ddl];
+            fread(PhysicalAddress, 1, dd, f);
+            PhysicalAddress[dd] = 0;
+            section[i].Misc.PhysicalAddress = hextoint(PhysicalAddress, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PhysicalAddress/VirtualSize", section[i].Misc.PhysicalAddress, section[i].Misc.PhysicalAddress);
+
+
+            BYTE VirtualAddress[ddl];
+            fread(VirtualAddress, 1, dd, f);
+            VirtualAddress[dd] = 0;
+            section[i].VirtualAddress = hextoint(VirtualAddress, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "VirtualAddress", section[i].VirtualAddress, section[i].VirtualAddress);
+
+            BYTE SizeOfRawData[ddl];
+            fread(SizeOfRawData, 1, dd, f);
+            SizeOfRawData[dd] = 0;
+            section[i].SizeOfRawData = hextoint(SizeOfRawData, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "SizeOfRawData", section[i].SizeOfRawData, section[i].SizeOfRawData);
+
+            BYTE PointerToRawData[ddl];
+            fread(PointerToRawData, 1, dd, f);
+            PointerToRawData[dd] = 0;
+            section[i].PointerToRawData = hextoint(PointerToRawData, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRawData", section[i].PointerToRawData, section[i].PointerToRawData);
+
+            BYTE PointerToRelocations[ddl];
+            fread(PointerToRelocations, 1, dd, f);
+            PointerToRelocations[dd] = 0;
+            section[i].PointerToRelocations = hextoint(PointerToRelocations, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToRelocations", section[i].PointerToRelocations, section[i].PointerToRelocations);
+
+            BYTE PointerToLinenumbers[ddl];
+            fread(PointerToLinenumbers, 1, dd, f);
+            PointerToLinenumbers[dd] = 0;
+            section[i].PointerToLinenumbers = hextoint(PointerToLinenumbers, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "PointerToLinenumbers", section[i].PointerToLinenumbers, section[i].PointerToLinenumbers);
+
+            BYTE NumberOfRelocations[dwl];
+            fread(NumberOfRelocations, 1, dw, f);
+            NumberOfRelocations[dw] = 0;
+            section[i].NumberOfRelocations = (WORD) hextoint(NumberOfRelocations, dwl);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfRelocations", section[i].NumberOfRelocations, section[i].NumberOfRelocations);
+
+            BYTE NumberOfLinenumbers[dwl];
+            fread(NumberOfLinenumbers, 1, dw, f);
+            NumberOfLinenumbers[dw] = 0;
+            section[i].NumberOfLinenumbers = (WORD) hextoint(NumberOfLinenumbers, dwl);
+            printf("%-30s | %-11u | %-#11x\n", "NumberOfLinenumbers", section[i].NumberOfLinenumbers, section[i].NumberOfLinenumbers);
+
+            BYTE characteristics[ddl];
+            fread(characteristics, 1, dd, f);
+            characteristics[dd] = 0;
+            section[i].Characteristics = hextoint(characteristics, dd);
+            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics, section[i].Characteristics);
+        }
     } else {
         printf("Invalid magic in optional header.");
         end(1);
     }
 
 
-    WORD no_sections = getval(dw, e_lfanew + 6);
-    WORD optional_size = getval(dw, e_lfanew + 20);
-    DWORD optional = e_lfanew + 24;
-    DWORD entry = getval(dd, optional + 16);
-    // 0Bh 01h => optional_magic = 0x10B = 267 => 32-bit
-    // 0Bh 02h => optional_magic = 0x20B = 523 => 64-bit
-    WORD optional_magic = getval(dw, optional);
-    DWORD sectbl1 = optional + optional_size;
+    // WORD no_sections = getval(dw, e_lfanew + 6);
+    // WORD optional_size = getval(dw, e_lfanew + 20);
+    // DWORD optional = e_lfanew + 24;
+    // DWORD entry = getval(dd, optional + 16);
+    // // 0Bh 01h => optional_magic = 0x10B = 267 => 32-bit
+    // // 0Bh 02h => optional_magic = 0x20B = 523 => 64-bit
+    // WORD optional_magic = getval(dw, optional);
+    // DWORD sectbl1 = optional + optional_size;
 
-    printf("\nSections:\n");
-    char sections[no_sections][8 + 1];
-    for (int i = 0; i < no_sections; i++) {
-        fseek(f, sectbl1 + 40 * i, SEEK_SET);
-        fread(sections[i], 1, 8, f);
-        sections[i][8] = '\0'; // Name does not have a terminating \0
-        printf("%s\n", sections[i]);
-    }
+    // printf("\nSections:\n");
+    // char sections[no_sections][8 + 1];
+    // for (int i = 0; i < no_sections; i++) {
+    //     fseek(f, sectbl1 + 40 * i, SEEK_SET);
+    //     fread(sections[i], 1, 8, f);
+    //     sections[i][8] = '\0'; // Name does not have a terminating \0
+    //     printf("%s\n", sections[i]);
+    // }
 
     end(0);
 }
