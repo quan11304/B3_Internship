@@ -103,6 +103,14 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
     IMAGE_DATA_DIRECTORY DataDirectory[16];
 } IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
 
+// String array to be printed out. Has no actual meaning in the programme.
+char *datadir[16] = {
+    "Export", "Import", "Resource", "Exception",
+    "Security", "BaseReloc", "Debug", "Copyright",
+    "GlobalPtr", "TLS", "Load_Config", "Bound_Import",
+    "IAT", "Delay_Import", "COM_Descriptor", "Reserved"
+};
+
 typedef struct _IMAGE_SECTION_HEADER {
     BYTE Name[IMAGE_SIZEOF_SHORT_NAME + 1];
 
@@ -124,8 +132,8 @@ typedef struct _IMAGE_SECTION_HEADER {
 typedef struct _IMAGE_EXPORT_DIRECTORY {
     DWORD Characteristics;
     DWORD TimeDateStamp;
-    WORD MajorFunction;
-    WORD MinorFunction;
+    WORD MajorVersion;
+    WORD MinorVersion;
     DWORD nName;
     DWORD nBase;
     DWORD NumberOfFunctions;
@@ -134,5 +142,16 @@ typedef struct _IMAGE_EXPORT_DIRECTORY {
     DWORD AddressOfNames;
     DWORD AddressOfNameOrdinals;
 } IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
+
+typedef struct _IMAGE_IMPORT_DIRECTORY {
+    union {
+        DWORD Characteristics;
+        DWORD OriginalFirstThunk;
+    } Misc;
+    DWORD TimeDateStamp;
+    DWORD ForwarderChain;
+    DWORD Name1;
+    DWORD FirstThunk;
+} IMAGE_IMPORT_DIRECTORY, *PIMAGE_IMPORT_DIRECTORY;
 
 #endif //STRUCT_H
