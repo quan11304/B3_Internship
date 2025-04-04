@@ -1,21 +1,10 @@
-//
-// Created by quanonthecob on 03/04/25.
-//
-
 #ifndef STRUCT_H
 #define STRUCT_H
 
-#define db 1		// Corresponds to char
-#define dw 2		// Corresponds to short
-#define dd 4		// Corresponds to long
-#define dbl 2
-#define dwl 3
-#define ddl 5
 #define IMAGE_SIZEOF_SHORT_NAME 8
 
-typedef unsigned char BYTE;
-typedef unsigned short WORD;
-typedef unsigned long DWORD;
+#include "../datatypes.h"
+#include "../misc.c"
 
 // Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
 typedef struct _IMAGE_DATA_DIRECTORY {
