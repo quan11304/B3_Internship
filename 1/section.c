@@ -1,7 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../struct.h"
+#include "struct.h"
+#include "misc.c"
+
+// String array to be printed out. Has no actual meaning in the programme.
+char *datadir[16] = {
+    "Export", "Import", "Resource", "Exception",
+    "Security", "BaseReloc", "Debug", "Copyright",
+    "GlobalPtr", "TLS", "Load_Config", "Bound_Import",
+    "IAT", "Delay_Import", "COM_Descriptor", "Reserved"
+};
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {

@@ -4,7 +4,6 @@
 #define IMAGE_SIZEOF_SHORT_NAME 8
 
 #include "datatypes.h"
-#include "misc.c"
 
 // Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
 typedef struct _IMAGE_DATA_DIRECTORY {
@@ -92,14 +91,6 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
     IMAGE_DATA_DIRECTORY DataDirectory[16];
 } IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
 
-// String array to be printed out. Has no actual meaning in the programme.
-char *datadir[16] = {
-    "Export", "Import", "Resource", "Exception",
-    "Security", "BaseReloc", "Debug", "Copyright",
-    "GlobalPtr", "TLS", "Load_Config", "Bound_Import",
-    "IAT", "Delay_Import", "COM_Descriptor", "Reserved"
-};
-
 typedef struct _IMAGE_SECTION_HEADER {
     BYTE Name[IMAGE_SIZEOF_SHORT_NAME + 1];
 
@@ -137,6 +128,7 @@ typedef struct _IMAGE_IMPORT_DIRECTORY {
         DWORD Characteristics;
         DWORD OriginalFirstThunk;
     } Misc;
+
     DWORD TimeDateStamp;
     DWORD ForwarderChain;
     DWORD Name1;
