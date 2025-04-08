@@ -3,8 +3,8 @@
 
 #define IMAGE_SIZEOF_SHORT_NAME 8
 
-#include "../datatypes.h"
-#include "../misc.c"
+#include "datatypes.h"
+#include "misc.c"
 
 // Ref: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
 typedef struct _IMAGE_DATA_DIRECTORY {
@@ -68,7 +68,7 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
     DWORD SizeOfUninitializedData;
     DWORD AddressOfEntryPoint;
     DWORD BaseOfCode;
-    unsigned long long ImageBase;
+    QWORD ImageBase;
     DWORD SectionAlignment;
     DWORD FileAlignment;
     WORD MajorOperatingSystemVersion;
@@ -83,10 +83,10 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
     DWORD CheckSum;
     WORD Subsystem;
     WORD DllCharacteristics;
-    unsigned long long SizeOfStackReserve;
-    unsigned long long SizeOfStackCommit;
-    unsigned long long SizeOfHeapReserve;
-    unsigned long long SizeOfHeapCommit;
+    QWORD SizeOfStackReserve;
+    QWORD SizeOfStackCommit;
+    QWORD SizeOfHeapReserve;
+    QWORD SizeOfHeapCommit;
     DWORD LoaderFlags;
     DWORD NumberOfRvaAndSizes;
     IMAGE_DATA_DIRECTORY DataDirectory[16];
