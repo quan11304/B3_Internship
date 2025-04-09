@@ -34,12 +34,26 @@ ULONGLONG getval(FILE *stream, int length, int whence, int offset) {
     // No return but this still works?
 }
 
-void setval_char(FILE *stream, char *data, int length) {
-    fwrite(data, 1, length, stream);
+void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
+    fseek(stream, offset, whence);
+    for (int i = 0, term = 0; i < length; ++i) {
+        if (term != 0) {
+            fwrite('\0', 1, 1, stream);
+        } else if (data + i != 0) {
+            fwrite(data, 1, 1, stream);
+        } else {
+            term = 1;
+            fwrite('\0', 1, 1, stream);
+        }
+    }
+    // Write until end of string (termination \0)
+    // Insert \0 after end of string until length is reached
 }
 
-void setval_int(FILE *stream, int data, int length) {
-    BYTE input[length];
-    sprintf(input, "%llx", data);
-    fwrite(data, 1, length, stream);
+void setval_int(FILE *stream, ULONGLONG data, int length, int whence, int offset) {
+    // BYTE input[length];
+    // sprintf(input, "%llx", data);
+    // puts(input);
+    fseek(stream, offset, whence);
+    fwrite(&data, 1, length, stream);
 }
