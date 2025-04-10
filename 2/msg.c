@@ -1,6 +1,6 @@
-#include <winuser.h>
+#include <windows.h>
 
-void msg() {
+int main() {
     MessageBox(0,
         "You have been infected.",
         "Notice",
