@@ -27,8 +27,7 @@ int main(int argc, char *argv[]) {
 	imageFileHeader.NumberOfSections =
 		getval(fr, dw, SEEK_SET, imageDosHeader.e_lfanew+6);
 	setval_int(fr,imageFileHeader.NumberOfSections+1,
-		sizeof(imageFileHeader.NumberOfSections),
-		SEEK_CUR, -sizeof(imageFileHeader.NumberOfSections));
+		dw,SEEK_SET,imageDosHeader.e_lfanew+6);
 
 	imageFileHeader.SizeOfOptionalHeader =
 		getval(fr, dw, SEEK_SET, imageDosHeader.e_lfanew + 20);
@@ -82,7 +81,7 @@ int main(int argc, char *argv[]) {
 		// SizeOfRawData
 		closest(newish.Misc.VirtualSize,imageOptionalHeader.FileAlignment),
 		// PointerToRawData
-		0,
+		0, // Edit
 		// PointerToRelocations
 		0,
 		// PointerToLinenumbers
@@ -107,6 +106,8 @@ int main(int argc, char *argv[]) {
 	setval_int(fr, newish.NumberOfRelocations, dw, SEEK_CUR, 0);
 	setval_int(fr, newish.NumberOfLinenumbers, dw, SEEK_CUR, 0);
 	setval_int(fr, newish.Characteristics, dd, SEEK_CUR, 0);
+
+
 
 	end(fr, 0);
 }
