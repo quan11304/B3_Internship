@@ -9,7 +9,8 @@ int main(int argc, char *argv[]) {
 
 	// argv[1] = Path to executable
 	FILE *fr = fopen(argv[1], "r+b");
-	FILE *fa = fopen(argv[1], "a+b");
+	FILE *fa = fopen(argv[1], "ab");
+	FILE *f[2] = { fr, fa };
 
 	IMAGE_DOS_HEADER imageDosHeader;
 	IMAGE_FILE_HEADER imageFileHeader;
@@ -19,7 +20,7 @@ int main(int argc, char *argv[]) {
 	imageDosHeader.e_magic = getval(fr, dw, SEEK_SET,0);
 	if (imageDosHeader.e_magic != 0x5a4d) {
 		printf("Input error. File is not a PE executable.");
-		end(fr, 1);
+		end(f, 1);
 	}
 
 	imageDosHeader.e_lfanew = getval(fr, dd, SEEK_SET, 0x3C);
@@ -109,5 +110,5 @@ int main(int argc, char *argv[]) {
 
 
 
-	end(fr, 0);
+	end(f, 0);
 }
