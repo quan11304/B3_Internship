@@ -61,3 +61,16 @@ void setval_int(FILE *stream, ULONGLONG data, int length, int whence, int offset
     fseek(stream, offset, whence);
     fwrite(&data, 1, length, stream);
 }
+
+// Designed for append mode
+void instruct(FILE *stream, char instruction, void * value) {
+    fwrite(&instruction, sizeof(instruction), 1, stream);
+    // Check if value is char (1 byte) or int (4 bytes)
+    fwrite(value, *(int*)value <= 0xFF ? 1 : 4, 1, stream);
+}
+
+void pad(FILE *stream, int length) {
+    for (int i = 0; i < length; ++i) {
+        fputc(0, stream);
+    }
+}

