@@ -5,13 +5,12 @@
 
 // Function to find closest value of FileAlignment that's more than the section's size
 ULONGLONG closest(DWORD actual, DWORD alignment) {
-    return alignment * ceil(actual/alignment);
+    return alignment * ceil((double) actual/alignment);
 }
 
 void debug(unsigned char *array, int size) {
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
         printf("%02x ", array[i]);
-    }
     printf("\n");
 }
 
@@ -58,9 +57,6 @@ void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
 }
 
 void setval_int(FILE *stream, ULONGLONG data, int length, int whence, int offset) {
-    // BYTE input[length];
-    // sprintf(input, "%llx", data);
-    // puts(input);
     fseek(stream, offset, whence);
     fwrite(&data, 1, length, stream);
 }
