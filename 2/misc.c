@@ -32,7 +32,7 @@ ULONGLONG hextoint(BYTE *input, int size) {
     return var;
 }
 
-// Read AND convert to long long unsigned int type
+// Read AND convert to unsigned long long type
 ULONGLONG getval(FILE *stream, int length, int whence, int offset) {
     BYTE input[length];
     fseek(stream, offset, whence);

