@@ -24,10 +24,11 @@
 - Edit PointerToRawData (main.c:85)
 - Is finding the last section header in the programme necessary? (main.c:59)
 - Change AddressOfEntryPoint (main.c:43)
-- Add call to MessageBoxA (main.c:117) and jump to AddressOfEntryPoint (main.c:119)
+- Import user32.dll and add call to MessageBoxA (main.c:117)
+- Jump to AddressOfEntryPoint (main.c:119)
 - Add 64-bit code
-- Loop to scan all files in a folder
 - Re-evaluate necessity of setval_int() (misc.c:59)
 - Does Section Header always have a zero-padding section?
-- Scan for an already in-place injection
+- Scan for an already in-place injection (necessary?)
 3. To-do
+- Loop to scan all files in a folder

