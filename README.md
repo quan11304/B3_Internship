@@ -20,13 +20,13 @@
 ## Progress
 1. _Done_
 2. **In Progress**
-- Edit VirtualSize (main.c:79)
-- Edit PointerToRawData (main.c:85)
-- Is finding the last section header in the programme necessary? (main.c:59)
-- Change AddressOfEntryPoint (main.c:43)
 - Import user32.dll and add call to MessageBoxA (main.c:117)
 - Jump to AddressOfEntryPoint (main.c:119)
+- Change AddressOfEntryPoint (main.c:43)
+- Edit VirtualSize (main.c:79)
+- Edit PointerToRawData (main.c:85)
 - Add 64-bit code
+- Is finding the last section header in the programme necessary? (main.c:59)
 - Re-evaluate necessity of setval_int() (misc.c:59)
 - Does Section Header always have a zero-padding section?
 - Scan for an already in-place injection (necessary?)
