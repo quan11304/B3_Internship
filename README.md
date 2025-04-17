@@ -20,14 +20,16 @@
 ## Progress
 1. _Done_
 2. **In Progress**
-- Import user32.dll and add call to MessageBoxA (main.c:117)
-- Jump to AddressOfEntryPoint (main.c:119)
+- Import user32.dll or MessageBoxA (main.c:156)
+- Add call to MessageBoxA (main.c:211)
+- Jump to AddressOfEntryPoint (main.c:213)
 - Change AddressOfEntryPoint (main.c:43)
-- Edit VirtualSize (main.c:79)
-- Edit PointerToRawData (main.c:85)
+- Increase SizeOfImage (main.c:215)
+- Edit VirtualSize (main.c:171)
+- Edit PointerToRawData (main.c:177)
 - Add 64-bit code
 - Is finding the last section header in the programme necessary? (main.c:59)
-- Re-evaluate necessity of setval_int() (misc.c:59)
+- Re-evaluate necessity of setval_int() (misc.c:60)
 - Does Section Header always have a zero-padding section?
 - Scan for an already in-place injection (necessary?)
 3. To-do
