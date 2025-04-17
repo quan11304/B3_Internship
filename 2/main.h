@@ -14,3 +14,4 @@
 #define db 1
 #define dw 2
 #define dd 4
+#define dq 8

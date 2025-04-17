@@ -73,9 +73,9 @@ int main(int argc, char *argv[]) {
 	IMAGE_SECTION_HEADER lastish;
 	lastish.PointerToRawData = 0;
 	DWORD lastish_offset = 0;
-	// File offset for Import Table and the containing section
+	// File offset for Import Table and RVA of the containing section
 	DWORD import_offset, import_section_rva = 0;
-	// File offset for IAT and the containing section
+	// File offset for IAT and RVA of the containing section
 	DWORD iat_offset, iat_section_rva = 0;
 	for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
 		DWORD current_rva = getval(fr, dd, SEEK_SET,
@@ -87,10 +87,12 @@ int main(int argc, char *argv[]) {
 		if (current_rva > import_section_rva && current_rva <= imageOptionalHeader.DataDirectory[1].VirtualAddress) {
 			import_section_rva = current_rva;
 			import_offset = imageOptionalHeader.DataDirectory[1].VirtualAddress - current_rva + current_offset;
+				// = imageOptionalHeader.DataDirectory[1].VirtualAddress - import_section_rva + current_offset;
 		}
 		if (current_rva > iat_section_rva && current_rva <= imageOptionalHeader.DataDirectory[12].VirtualAddress) {
 			iat_section_rva = current_rva;
 			iat_offset = imageOptionalHeader.DataDirectory[12].VirtualAddress - current_rva + current_offset;
+				// = imageOptionalHeader.DataDirectory[12].VirtualAddress - iat_section_rva + current_offset;
 		}
 
 		// Find PointerToRawData of the last section
@@ -101,7 +103,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	IMAGE_IMPORT_DESCRIPTOR user32dll;
+	IMAGE_IMPORT_DESCRIPTOR user32dll_iid;
+	int user32dll_exist, function_exist = 0;
 	// Search for user32.dll
 	for (int i = 0; ; ++i) {
 		DWORD name_rva = getval(fr, dd, SEEK_SET,import_offset + 20 * i + 12);
@@ -116,14 +119,44 @@ int main(int argc, char *argv[]) {
 		}
 
 		if (strcmp(name,"user32.dll")==0) {
-			user32dll.OriginalFirstThunk = getval(fr, dd, SEEK_SET,
-				imageOptionalHeader.DataDirectory[1].VirtualAddress + 20 * i);
-			user32dll.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
-			user32dll.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
-			user32dll.Name = getval(fr, dd, SEEK_CUR, 0);
-			user32dll.FirstThunk = getval(fr, dd, SEEK_CUR, 0);
+			user32dll_exist = 1;
+
+			user32dll_iid.OriginalFirstThunk = getval(fr, dd, SEEK_SET, import_offset + 20 * i);
+			user32dll_iid.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
+			user32dll_iid.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
+			user32dll_iid.Name = getval(fr, dd, SEEK_CUR, 0);
+			user32dll_iid.FirstThunk = getval(fr, dd, SEEK_CUR, 0);
+
+			// Ignore functions imported using ordinals
+			IMAGE_THUNK_DATA thunk;
+			for (int j = 0 ;; j++) {
+				thunk.u1.AddressOfData =
+					getval(fr, imageOptionalHeader.Magic == 0x10B ? dd : dq, SEEK_SET,
+				   user32dll_iid.OriginalFirstThunk - iat_section_rva + iat_offset +
+				   (imageOptionalHeader.Magic == 0x10B ? 4 : 8) * j);
+				if (thunk.u1.AddressOfData == 0) break; // No MessageBoxA
+
+				BYTE function[MAX_PATH];
+				// Not accounting for Hint/Names table being in a different section
+				fseek(fr, user32dll_iid.Name - import_section_rva + import_offset, SEEK_SET);
+				// Read function name, byte by byte
+				for (int k = 0; k < MAX_PATH; k++) {
+					fread(function+k, 1, 1, fr);
+					if (function[k] == 0) break;
+				}
+				if (strcmp(function,"MessageBoxA")==0) {
+					function_exist = 1;
+				}
+
+			}
 			break;
 		}
+	}
+
+	if (user32dll_exist == 0) {
+
+	} else if (function_exist ==0) {
+
 	}
 
 	lastish.VirtualAddress =
@@ -172,6 +205,8 @@ int main(int argc, char *argv[]) {
 	instruct(fa, 0x68, imageOptionalHeader.ImageBase+newish.PointerToRawData);
 	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.PointerToRawData + strlen(msgCaption) + 1);
 	instruct(fa, 0x6a, 0);
+	instruct(fa, 0xFF25, imageOptionalHeader.ImageBase + 0);
+	// ImageBase + IAT RVA of MessageBoxA
 
 	// Call MessageBoxA
 

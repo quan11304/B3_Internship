@@ -43,7 +43,7 @@ ULONGLONG getval(FILE *stream, int length, int whence, int offset) {
 
 void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
     fseek(stream, offset, whence);
-    for (int i = 0, term = 0; i < length; ++i) {
+    for (int i = 0, term = 0; i < length; ++i)
         if (term != 0) {
             fwrite('\0', 1, 1, stream);
         } else if (data + i != 0) {
@@ -52,7 +52,6 @@ void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
             term = 1;
             fwrite('\0', 1, 1, stream);
         }
-    }
     // Write until end of string (termination \0)
     // Insert \0 after end of string until length is reached
 }
@@ -63,8 +62,13 @@ void setval_int(FILE *stream, ULONGLONG data, int length, int whence, int offset
 }
 
 // Designed for append mode
-void instruct(FILE *stream, char instruction, void * value) {
-    fwrite(&instruction, sizeof(instruction), 1, stream);
+void instruct(FILE *stream, void * instruction, void * value) {
+    for (int i = *(int *) instruction <= 0xFF ? 0 :
+        *(int*) instruction <= 0xFFFF ? 1 :
+        *(int*) instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
+        fwrite(instruction+i, 1, 1, stream);
+        }
+
     // Check if value is char (1 byte) or int (4 bytes)
     fwrite(value, *(int*)value <= 0xFF ? 1 : 4, 1, stream);
 }
