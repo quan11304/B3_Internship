@@ -62,15 +62,16 @@ void setval_int(FILE *stream, ULONGLONG data, int length, int whence, int offset
 }
 
 // Designed for append mode
-void instruct(FILE *stream, void * instruction, void * value) {
-    for (int i = *(int *) instruction <= 0xFF ? 0 :
-        *(int*) instruction <= 0xFFFF ? 1 :
-        *(int*) instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
-        fwrite(instruction+i, 1, 1, stream);
+void instruct(FILE *stream, DWORD instruction, DWORD value) {
+    // Big-endian writing
+    for (int i = instruction <= 0xFF ? 0 : instruction <= 0xFFFF ? 1 :
+        instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
+        fwrite(&instruction+i, 1, 1, stream);
         }
 
     // Check if value is char (1 byte) or int (4 bytes)
-    fwrite(value, *(int*)value <= 0xFF ? 1 : 4, 1, stream);
+    // Little-endian writing
+    fwrite(&value, value <= 0xFF ? 1 : 4, 1, stream);
 }
 
 void pad(FILE *stream, int length) {

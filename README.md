@@ -21,12 +21,8 @@
 1. _Done_
 2. **In Progress**
 - Import user32.dll or MessageBoxA (main.c:156)
-- Add call to MessageBoxA (main.c:211)
-- Jump to AddressOfEntryPoint (main.c:213)
-- Change AddressOfEntryPoint (main.c:43)
 - Increase SizeOfImage (main.c:215)
-- Edit VirtualSize (main.c:171)
-- Edit PointerToRawData (main.c:177)
+- Increase size of section header in case there's no space
 - Add 64-bit code
 - Is finding the last section header in the programme necessary? (main.c:59)
 - Re-evaluate necessity of setval_int() (misc.c:60)
