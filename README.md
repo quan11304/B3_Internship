@@ -21,12 +21,9 @@
 1. _Done_
 2. **In Progress**
 - Import user32.dll or MessageBoxA (main.c:156)
-- Increase SizeOfImage (main.c:215)
 - Increase size of section header in case there's no space
 - Add 64-bit code
-- Is finding the last section header in the programme necessary? (main.c:59)
-- Re-evaluate necessity of setval_int() (misc.c:60)
-- Does Section Header always have a zero-padding section?
+- Add a mechanism in case section header does not have space to inject: Move first section to last
 - Scan for an already in-place injection (necessary?)
 3. To-do
 - Loop to scan all files in a folder

@@ -56,7 +56,7 @@ void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
     // Insert \0 after end of string until length is reached
 }
 
-void setval_int(FILE *stream, ULONGLONG data, int length, int whence, int offset) {
+void setval_int(FILE *stream, ULONGLONG data, int length, int whence, DWORD offset) {
     fseek(stream, offset, whence);
     fwrite(&data, 1, length, stream);
 }

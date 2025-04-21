@@ -233,11 +233,15 @@ int main(int argc, char *argv[]) {
 	setval_int(fr, newish.NumberOfLinenumbers, dw, SEEK_CUR, 0);
 	setval_int(fr, newish.Characteristics, dd, SEEK_CUR, 0);
 
-	// // Edit SizeOfImage
-	// imageOptionalHeader.SizeOfImage =
-	// 		closest(imageOptionalHeader.SizeOfImage + newish.SizeOfRawData,imageOptionalHeader
+	// Edit SizeOfImage
+	imageOptionalHeader.SizeOfImage = closest(imageOptionalHeader.SizeOfImage + newish.SizeOfRawData,
+		imageOptionalHeader.SectionAlignment);
+	setval_int(fr, imageOptionalHeader.SizeOfImage, dd, SEEK_SET, ioh_offset + 56);
 
 	// Edit SizeOfHeaders
+	imageOptionalHeader.SizeOfHeaders = closest(imageOptionalHeader.SizeOfHeaders + 40,
+		imageOptionalHeader.FileAlignment);
+	setval_int(fr, imageOptionalHeader.SizeOfHeaders, dd, SEEK_SET, ioh_offset + 60);
 
 	end(f, 0);
 }
