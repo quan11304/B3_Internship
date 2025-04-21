@@ -20,6 +20,7 @@
 ## Progress
 1. _Done_
 2. **In Progress**
+- Enlarge the last section (main.c:126)
 - Import user32.dll or MessageBoxA (main.c:156)
 - Increase SizeOfImage (main.c:215)
 - Increase size of section header in case there's no space
@@ -28,5 +29,7 @@
 - Re-evaluate necessity of setval_int() (misc.c:60)
 - Does Section Header always have a zero-padding section?
 - Scan for an already in-place injection (necessary?)
+- Set exception protection for file descriptors
+- Any way to replace expected_length?
 3. To-do
 - Loop to scan all files in a folder

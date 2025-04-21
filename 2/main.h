@@ -15,3 +15,4 @@
 #define dw 2
 #define dd 4
 #define dq 8
+#define expected_length 60 // Length of injected code

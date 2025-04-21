@@ -374,6 +374,123 @@ int main(int argc, char *argv[]) {
             printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", section[i].Characteristics,
                    section[i].Characteristics);
         }
+
+        // Export Table
+        if (ioh.DataDirectory[0].VirtualAddress != 0) {
+            fseek(f, ioh.DataDirectory[0].VirtualAddress, SEEK_SET);
+            IMAGE_EXPORT_DIRECTORY export;
+            printf("\n");
+            printf("Export table: \n");
+
+            BYTE Characteristics2[ddl];
+            fread(Characteristics2, 1, dd, f);
+            Characteristics2[dd] = 0;
+            export.Characteristics = hextoint(Characteristics2, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", export.Characteristics, export.Characteristics);
+
+            BYTE TimeDateStamp2[ddl];
+            fread(TimeDateStamp2, 1, dd, f);
+            TimeDateStamp2[dd] = 0;
+            export.TimeDateStamp = hextoint(TimeDateStamp2, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "TimeDateStamp", export.TimeDateStamp, export.TimeDateStamp);
+
+            BYTE MajorVersion[dwl];
+            fread(MajorVersion, 1, dw, f);
+            MajorVersion[dw] = 0;
+            export.MajorVersion = (WORD) hextoint(MajorVersion, dwl);
+            printf("%-30s | %-11u | %-#11x\n", "MajorVersion", export.MajorVersion, export.MajorVersion);
+
+            BYTE MinorVersion[dwl];
+            fread(MinorVersion, 1, dw, f);
+            MinorVersion[dw] = 0;
+            export.MinorVersion = (WORD) hextoint(MinorVersion, dwl);
+            printf("%-30s | %-11u | %-#11x\n", "MinorVersion", export.MinorVersion, export.MinorVersion);
+
+            BYTE nName[ddl];
+            fread(nName, 1, dd, f);
+            nName[dd] = 0;
+            export.nName = hextoint(nName, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "nName", export.nName, export.nName);
+
+            BYTE nBase[ddl];
+            fread(nBase, 1, dd, f);
+            nBase[dd] = 0;
+            export.nBase = hextoint(nBase, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "nBase", export.nBase, export.nBase);
+
+            BYTE NumberOfFunctions[ddl];
+            fread(NumberOfFunctions, 1, dd, f);
+            NumberOfFunctions[dd] = 0;
+            export.NumberOfFunctions = hextoint(NumberOfFunctions, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "NumberOfFunctions", export.NumberOfFunctions,
+                   export.NumberOfFunctions);
+
+            BYTE NumberOfNames[ddl];
+            fread(NumberOfNames, 1, dd, f);
+            NumberOfNames[dd] = 0;
+            export.NumberOfNames = hextoint(NumberOfNames, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "NumberOfNames", export.NumberOfNames, export.NumberOfNames);
+
+            BYTE AddressOfFunctions[ddl];
+            fread(AddressOfFunctions, 1, dd, f);
+            AddressOfFunctions[dd] = 0;
+            export.AddressOfFunctions = hextoint(AddressOfFunctions, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "AddressOfFunctions", export.AddressOfFunctions,
+                   export.AddressOfFunctions);
+
+
+            BYTE AddressOfNames[ddl];
+            fread(AddressOfNames, 1, dd, f);
+            AddressOfNames[dd] = 0;
+            export.AddressOfNames = hextoint(AddressOfNames, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "AddressOfNames", export.AddressOfNames, export.AddressOfNames);
+
+            BYTE AddressOfNameOrdinals[ddl];
+            fread(AddressOfNameOrdinals, 1, dd, f);
+            AddressOfNameOrdinals[dd] = 0;
+            export.AddressOfNameOrdinals = hextoint(AddressOfNameOrdinals, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "AddressOfNameOrdinals", export.AddressOfNameOrdinals,
+                   export.AddressOfNameOrdinals);
+        }
+
+        // Import table
+        if (ioh.DataDirectory[1].VirtualAddress != 0) {
+            fseek(f, ioh.DataDirectory[1].VirtualAddress, SEEK_SET);
+            IMAGE_IMPORT_DIRECTORY import;
+            printf("\n");
+            printf("Import table:\n");
+
+            BYTE Characteristics2[ddl];
+            fread(Characteristics2, 1, dd, f);
+            Characteristics2[dd] = 0;
+            import.Misc.Characteristics = hextoint(Characteristics2, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "Characteristics/OG1stThunk", import.Misc.Characteristics,
+                   import.Misc.Characteristics);
+
+            BYTE TimeDateStamp2[ddl];
+            fread(TimeDateStamp2, 1, dd, f);
+            TimeDateStamp2[dd] = 0;
+            import.TimeDateStamp = hextoint(TimeDateStamp2, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "TimeDateStamp", import.TimeDateStamp, import.TimeDateStamp);
+
+            BYTE ForwarderChain[ddl];
+            fread(ForwarderChain, 1, dd, f);
+            ForwarderChain[dd] = 0;
+            import.ForwarderChain = hextoint(ForwarderChain, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "ForwarderChain", import.ForwarderChain, import.ForwarderChain);
+
+            BYTE Name1[ddl];
+            fread(Name1, 1, dd, f);
+            Name1[dd] = 0;
+            import.Name1 = hextoint(Name1, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "Name1", import.Name1, import.Name1);
+
+            BYTE FirstThunk[ddl];
+            fread(FirstThunk, 1, dd, f);
+            FirstThunk[dd] = 0;
+            import.FirstThunk = hextoint(FirstThunk, ddl);
+            printf("%-30s | %-11lu | %-#11lx\n", "FirstThunk", import.FirstThunk, import.FirstThunk);
+        }
     } else if (_Magic == 523) {
         IMAGE_OPTIONAL_HEADER64 ioh;
         ioh.Magic = _Magic;
@@ -653,16 +770,16 @@ int main(int argc, char *argv[]) {
             printf("\n");
             printf("Export table: \n");
 
-            BYTE Characteristics[ddl];
-            fread(Characteristics, 1, dd, f);
-            Characteristics[dd] = 0;
-            export.Characteristics = hextoint(Characteristics, ddl);
+            BYTE Characteristics2[ddl];
+            fread(Characteristics2, 1, dd, f);
+            Characteristics2[dd] = 0;
+            export.Characteristics = hextoint(Characteristics2, ddl);
             printf("%-30s | %-11lu | %-#11lx\n", "Characteristics", export.Characteristics, export.Characteristics);
 
-            BYTE TimeDateStamp[ddl];
-            fread(TimeDateStamp, 1, dd, f);
-            TimeDateStamp[dd] = 0;
-            export.TimeDateStamp = hextoint(TimeDateStamp, ddl);
+            BYTE TimeDateStamp2[ddl];
+            fread(TimeDateStamp2, 1, dd, f);
+            TimeDateStamp2[dd] = 0;
+            export.TimeDateStamp = hextoint(TimeDateStamp2, ddl);
             printf("%-30s | %-11lu | %-#11lx\n", "TimeDateStamp", export.TimeDateStamp, export.TimeDateStamp);
 
             BYTE MajorVersion[dwl];
@@ -731,17 +848,17 @@ int main(int argc, char *argv[]) {
             printf("\n");
             printf("Import table:\n");
 
-            BYTE Characteristics[ddl];
-            fread(Characteristics, 1, dd, f);
-            Characteristics[dd] = 0;
-            import.Misc.Characteristics = hextoint(Characteristics, ddl);
+            BYTE Characteristics2[ddl];
+            fread(Characteristics2, 1, dd, f);
+            Characteristics2[dd] = 0;
+            import.Misc.Characteristics = hextoint(Characteristics2, ddl);
             printf("%-30s | %-11lu | %-#11lx\n", "Characteristics/OG1stThunk", import.Misc.Characteristics,
                    import.Misc.Characteristics);
 
-            BYTE TimeDateStamp[ddl];
-            fread(TimeDateStamp, 1, dd, f);
-            TimeDateStamp[dd] = 0;
-            import.TimeDateStamp = hextoint(TimeDateStamp, ddl);
+            BYTE TimeDateStamp2[ddl];
+            fread(TimeDateStamp2, 1, dd, f);
+            TimeDateStamp2[dd] = 0;
+            import.TimeDateStamp = hextoint(TimeDateStamp2, ddl);
             printf("%-30s | %-11lu | %-#11lx\n", "TimeDateStamp", import.TimeDateStamp, import.TimeDateStamp);
 
             BYTE ForwarderChain[ddl];
