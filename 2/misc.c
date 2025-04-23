@@ -9,8 +9,13 @@ ULONGLONG closest(DWORD actual, DWORD alignment) {
 }
 
 void debug(unsigned char *array, int size) {
-    for (int i = 0; i < size; i++)
-        printf("%02x ", array[i]);
+    if (size == 0)
+        // Print until \0
+        for (int i = 0; array[i] == 0; i++)
+            printf("%02x ", array[i]);
+    else
+        for (int i = 0; i < size; i++)
+            printf("%02x ", array[i]);
     printf("\n");
 }
 
@@ -33,7 +38,7 @@ ULONGLONG hextoint(BYTE *input, int size) {
 }
 
 // Read AND convert to unsigned long long type
-ULONGLONG getval(FILE *stream, int length, int whence, int offset) {
+ULONGLONG getval(FILE *stream, int length, int whence, DWORD offset) {
     BYTE input[length];
     fseek(stream, offset, whence);
     fread(input, 1, length, stream);
@@ -41,7 +46,7 @@ ULONGLONG getval(FILE *stream, int length, int whence, int offset) {
     // No return but this still works?
 }
 
-void setval_char(FILE *stream, char *data, int length, int whence, int offset) {
+void setval_char(FILE *stream, char *data, int length, int whence, DWORD offset) {
     fseek(stream, offset, whence);
     for (int i = 0, term = 0; i < length; ++i)
         if (term != 0) {
@@ -61,12 +66,12 @@ void setval_int(FILE *stream, ULONGLONG data, int length, int whence, DWORD offs
     fwrite(&data, 1, length, stream);
 }
 
-// Designed for append mode
 void instruct(FILE *stream, DWORD instruction, DWORD value) {
     // Big-endian writing
     for (int i = instruction <= 0xFF ? 0 : instruction <= 0xFFFF ? 1 :
         instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
-        fwrite(&instruction+i, 1, 1, stream);
+        // Byte-by-byte writing
+        fwrite((char *) &instruction+i, 1, 1, stream);
         }
 
     // Check if value is char (1 byte) or int (4 bytes)

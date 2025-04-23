@@ -11,6 +11,10 @@ int main(int argc, char *argv[]) {
 	FILE *fr = fopen(argv[1], "r+b");
 	FILE *fa = fopen(argv[1], "ab");
 	FILE *f[2] = { fr, fa };
+	if (fr == NULL || fa == NULL) {
+		printf("Error %d opening file.\n",errno);
+		exit(1);
+	}
 
 	IMAGE_DOS_HEADER imageDosHeader;
 	IMAGE_FILE_HEADER imageFileHeader;
@@ -54,19 +58,20 @@ int main(int argc, char *argv[]) {
 		getval(fr, dd, SEEK_SET, ioh_offset+32);
 	imageOptionalHeader.FileAlignment =
 		getval(fr, dd, SEEK_SET, ioh_offset+36);
-	// TO-DO: Increase SizeOfImage
 	imageOptionalHeader.SizeOfImage =
 		getval(fr, dd, SEEK_SET,ioh_offset + 56);
+	imageOptionalHeader.SizeOfHeaders = 
+		getval(fr, dd, SEEK_SET, ioh_offset + 60);
 
 	// Import Table
 	imageOptionalHeader.DataDirectory[1].VirtualAddress = getval(fr, dd, SEEK_SET,
-		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 104 : 120));
+		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 104 : 120)); // import_rva
 	imageOptionalHeader.DataDirectory[1].Size = getval(fr, dd, SEEK_SET,
 		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 108 : 124));
 
 	// Import Address Table (IAT)
 	imageOptionalHeader.DataDirectory[12].VirtualAddress = getval(fr, dd, SEEK_SET,
-		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 192 : 208));
+		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 192 : 208)); // iat_rva
 	imageOptionalHeader.DataDirectory[12].Size = getval(fr, dd, SEEK_SET,
 		ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 196 : 212));
 
@@ -76,9 +81,9 @@ int main(int argc, char *argv[]) {
 	lastish.PointerToRawData = 0;
 	DWORD lastish_offset = 0;
 	// File offset for Import Table and RVA of the containing section
-	DWORD import_offset, import_section_rva = 0;
+	DWORD import_offset, import_section_offset, import_section_rva = 0;
 	// File offset for IAT and RVA of the containing section
-	DWORD iat_offset, iat_section_rva = 0;
+	DWORD iat_offset, iat_section_offset, iat_section_rva = 0;
 	for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
 		DWORD current_rva = getval(fr, dd, SEEK_SET,
 			ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40*i + 12);
@@ -88,18 +93,20 @@ int main(int argc, char *argv[]) {
 		// Find file offset of Import Table
 		if (current_rva > import_section_rva && current_rva <= imageOptionalHeader.DataDirectory[1].VirtualAddress) {
 			import_section_rva = current_rva;
+			import_section_offset = current_offset;
 			import_offset = imageOptionalHeader.DataDirectory[1].VirtualAddress - current_rva + current_offset;
-				// = imageOptionalHeader.DataDirectory[1].VirtualAddress - import_section_rva + current_offset;
+			// = imageOptionalHeader.DataDirectory[1].VirtualAddress - import_section_rva + import_section_offset;
 		}
 		if (current_rva > iat_section_rva && current_rva <= imageOptionalHeader.DataDirectory[12].VirtualAddress) {
 			iat_section_rva = current_rva;
+			iat_section_offset = current_offset;
 			iat_offset = imageOptionalHeader.DataDirectory[12].VirtualAddress - current_rva + current_offset;
-				// = imageOptionalHeader.DataDirectory[12].VirtualAddress - iat_section_rva + current_offset;
+			// = imageOptionalHeader.DataDirectory[12].VirtualAddress - iat_section_rva + iat_section_offset;
 		}
 
 		// Find PointerToRawData of the last section
 		// Necessary? Not if section header is organised by the order of the sections' appearance in the programme
-		if (current_offset < lastish.PointerToRawData) {
+		if (current_offset > lastish.PointerToRawData) {
 			lastish.PointerToRawData = current_offset;
 			lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i;
 		}
@@ -111,9 +118,10 @@ int main(int argc, char *argv[]) {
 	// Search for user32.dll
 	for (int i = 0; ; ++i) {
 		DWORD name_rva = getval(fr, dd, SEEK_SET,import_offset + 20 * i + 12);
-		if (name_rva == 0) {
+
+		if (name_rva == 0) { // No user32.dll
+			printf("No user32.dll\n");
 			break;
-			// No user32.dll
 		}
 		BYTE name[MAX_PATH];
 
@@ -124,7 +132,8 @@ int main(int argc, char *argv[]) {
 			if (name[j] == 0) break;
 		}
 
-		if (strcmp(name,"user32.dll")==0) {
+		// Found. Search for MessageBoxA
+		if (strcasecmp(name,"user32.dll")==0) {
 			user32dll_iid.OriginalFirstThunk = getval(fr, dd, SEEK_SET, import_offset + 20 * i);
 			user32dll_iid.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
 			user32dll_iid.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
@@ -134,23 +143,26 @@ int main(int argc, char *argv[]) {
 			// Ignore functions imported using ordinals
 			IMAGE_THUNK_DATA thunk;
 			for (int j = 0 ;; j++) {
-				msgbox_iat_rva = user32dll_iid.OriginalFirstThunk +
-				   (imageOptionalHeader.Magic == 0x10B ? 4 : 8) * j;
 				// Retrieve RVA of function name to scan
+				msgbox_iat_rva = user32dll_iid.FirstThunk +
+				   (imageOptionalHeader.Magic == 0x10B ? 4 : 8) * j;
 				thunk.u1.AddressOfData = getval(fr,imageOptionalHeader.Magic == 0x10B ? dd : dq,
-					SEEK_SET,msgbox_iat_rva - iat_section_rva + iat_offset);
-				if (thunk.u1.AddressOfData == 0) break; // No MessageBoxA
+					SEEK_SET,msgbox_iat_rva - iat_section_rva + iat_section_offset);
+				if (thunk.u1.AddressOfData == 0) {  // No MessageBoxA
+					printf("No MessageBoxA\n");
+					break;
+				}
 
 				BYTE function[MAX_PATH];
 				// Not accounting for Hint/Names table being in a different section
 				// Doesn't seem to be an option since it's not part of Data Directory?
-				fseek(fr, user32dll_iid.Name - import_section_rva + import_offset, SEEK_SET);
+				fseek(fr, thunk.u1.AddressOfData - import_section_rva + import_section_offset + 2, SEEK_SET);
 				// Read function name, byte by byte
 				for (int k = 0; k < MAX_PATH; k++) {
 					fread(function+k, 1, 1, fr);
 					if (function[k] == 0) break;
 				}
-				if (strcmp(function,"MessageBoxA")==0) break;
+				if (strcasecmp(function,"MessageBoxA")==0) break;
 			}
 			break;
 		}
@@ -200,15 +212,15 @@ int main(int argc, char *argv[]) {
 	fwrite(msgText, strlen(msgText)+1, 1, fa);
 
 	// Insert new address of entry point
-	imageOptionalHeader.AddressOfEntryPoint = ftell(fa);
+	imageOptionalHeader.AddressOfEntryPoint = ftell(fa) - newish.PointerToRawData + newish.VirtualAddress;
 	setval_int(fr,imageOptionalHeader.AddressOfEntryPoint, dd, SEEK_SET, ioh_offset + 16);
 
 	// push 1030h (Type)
 	instruct(fa, 0x68, 0x1030);
 	// push msgCaption
-	instruct(fa, 0x68, imageOptionalHeader.ImageBase+newish.PointerToRawData);
+	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.VirtualAddress);
 	// push msgText
-	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.PointerToRawData + strlen(msgCaption) + 1);
+	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.VirtualAddress + strlen(msgCaption) + 1);
 	// push 0 (hWnd)
 	instruct(fa, 0x6a, 0);
 	// call MessageBoxA
