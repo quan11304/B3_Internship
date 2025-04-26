@@ -66,17 +66,21 @@ void setval_int(FILE *stream, ULONGLONG data, int length, int whence, DWORD offs
     fwrite(&data, 1, length, stream);
 }
 
-void instruct(FILE *stream, DWORD instruction, DWORD value) {
+void write_instruction(FILE *stream, int instruction) {
     // Big-endian writing
     for (int i = instruction <= 0xFF ? 0 : instruction <= 0xFFFF ? 1 :
         instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
         // Byte-by-byte writing
         fwrite((char *) &instruction+i, 1, 1, stream);
         }
+}
+
+void instruct(FILE *stream, DWORD instruction, DWORD value) {
+    write_instruction(stream, instruction);
 
     // Check if value is char (1 byte) or int (4 bytes)
     // Little-endian writing
-    fwrite(&value, value <= 0xFF ? 1 : 4, 1, stream);
+    fwrite(&value, abs(value) <= 0xFF ? 1 : 4, 1, stream);
 }
 
 void pad(FILE *stream, int length) {
