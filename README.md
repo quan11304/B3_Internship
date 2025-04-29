@@ -20,7 +20,9 @@
 ## Progress
 1. _Done_
 2. **In Progress**
-- Finished finding LoadLibrary with a loop (jmp back)
+- Reinstate stack
+- Fix jmp to entry point?
+- Thống nhất LoadLibrary shellcode and import table scanning
 - Import user32.dll or MessageBoxA (main.c:156)
 - Increase size of section header in case there's no space
 - Add 64-bit code

