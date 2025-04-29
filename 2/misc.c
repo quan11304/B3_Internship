@@ -5,7 +5,7 @@
 
 // Function to find closest value of FileAlignment that's more than the section's size
 ULONGLONG closest(DWORD actual, DWORD alignment) {
-    return alignment * ceil((double) actual/alignment);
+    return alignment * ceil((double) actual / alignment);
 }
 
 void debug(unsigned char *array, int size) {
@@ -68,19 +68,18 @@ void setval_int(FILE *stream, ULONGLONG data, int length, int whence, DWORD offs
 
 void write_instruction(FILE *stream, int instruction) {
     // Big-endian writing
-    for (int i = instruction <= 0xFF ? 0 : instruction <= 0xFFFF ? 1 :
-        instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
+    for (int i = instruction <= 0xFF ? 0 : instruction <= 0xFFFF ? 1 : instruction <= 0xFFFFFF ? 2 : 3; i >= 0; i--) {
         // Byte-by-byte writing
-        fwrite((char *) &instruction+i, 1, 1, stream);
-        }
+        fwrite((char *) &instruction + i, 1, 1, stream);
+    }
 }
 
-void instruct(FILE *stream, DWORD instruction, DWORD value) {
+void instruct(FILE *stream, DWORD instruction, DWORD value, short length) {
     write_instruction(stream, instruction);
 
     // Check if value is char (1 byte) or int (4 bytes)
     // Little-endian writing
-    fwrite(&value, abs(value) <= 0xFF ? 1 : 4, 1, stream);
+    fwrite(&value, length, 1, stream);
 }
 
 void pad(FILE *stream, int length) {
