@@ -74,12 +74,12 @@ void write_instruction(FILE *stream, int instruction) {
     }
 }
 
-void instruct(FILE *stream, DWORD instruction, DWORD value, short length) {
+void instruct(FILE *stream, DWORD instruction, DWORD value, short vallen) {
     write_instruction(stream, instruction);
 
     // Check if value is char (1 byte) or int (4 bytes)
     // Little-endian writing
-    fwrite(&value, length, 1, stream);
+    fwrite(&value, vallen, 1, stream);
 }
 
 void pad(FILE *stream, int length) {
