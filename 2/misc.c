@@ -19,10 +19,9 @@ void debug(unsigned char *array, int size) {
     printf("\n");
 }
 
-int end(FILE *stream[2], int status) {
+int end(FILE *stream, int status) {
     // To close the file stream before terminating the programme
-    fclose(stream[0]);
-    fclose(stream[1]);
+    fclose(stream);
     printf("\n");
     exit(status);
 }
