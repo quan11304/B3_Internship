@@ -20,7 +20,6 @@
 ## Progress
 1. _Done_
 2. **In Progress**
-- Thống nhất LoadLibrary shellcode and import table scanning
 - Add 64-bit code
 - Add a mechanism in case section header does not have space to inject: Move first section to last
 - Scan for an already in-place injection

@@ -123,66 +123,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    IMAGE_IMPORT_DESCRIPTOR user32dll_iid;
-    DWORD msgbox_iat_rva; // RVA of MessageBoxA in IAT
-
-    // Search for user32.dll
-    for (int i = 0; ; ++i) {
-        DWORD name_rva = getval(fr, dd, SEEK_SET, import_offset + 20 * i + 12);
-
-        if (name_rva == 0) {
-            // No user32.dll
-            printf("No user32.dll\n");
-            break;
-        }
-        BYTE name[MAX_PATH];
-
-        // Read name of import, byte by byte
-        fseek(fr, name_rva - imageOptionalHeader.DataDirectory[1].VirtualAddress + import_offset, SEEK_SET);
-        for (int j = 0; j < MAX_PATH; ++j) {
-            fread(name + j, 1, 1, fr);
-            if (name[j] == 0) break;
-        }
-
-        // Found. Search for MessageBoxA
-        if (strcasecmp(name, data[4]) == 0) {
-            user32dll_iid.OriginalFirstThunk = getval(fr, dd, SEEK_SET, import_offset + 20 * i);
-            user32dll_iid.TimeDateStamp = getval(fr, dd, SEEK_CUR, 0);
-            user32dll_iid.ForwarderChain = getval(fr, dd, SEEK_CUR, 0);
-            user32dll_iid.Name = getval(fr, dd, SEEK_CUR, 0);
-            user32dll_iid.FirstThunk = getval(fr, dd, SEEK_CUR, 0);
-
-            // Ignore functions imported using ordinals
-            IMAGE_THUNK_DATA thunk;
-            for (int j = 0;; j++) {
-                // Retrieve RVA of function name to scan
-                msgbox_iat_rva = user32dll_iid.FirstThunk +
-                                 (imageOptionalHeader.Magic == 0x10B ? 4 : 8) * j;
-                thunk.u1.AddressOfData = getval(fr, imageOptionalHeader.Magic == 0x10B ? dd : dq,
-                                                SEEK_SET, msgbox_iat_rva - iat_section_rva + iat_section_offset);
-                if (thunk.u1.AddressOfData == 0) {
-                    // No MessageBoxA
-                    printf("No MessageBoxA\n");
-                    break;
-                }
-
-                BYTE function[MAX_PATH];
-                // Not accounting for Hint/Names table being in a different section
-                // Doesn't seem to be an option since it's not part of Data Directory?
-                fseek(fr, thunk.u1.AddressOfData - import_section_rva + import_section_offset + 2, SEEK_SET);
-                // Read function name, byte by byte
-                for (int k = 0; k < MAX_PATH; k++) {
-                    fread(function + k, 1, 1, fr);
-                    if (function[k] == 0) break;
-                }
-
-                // Found MessageBoxA
-                if (strcasecmp(function, data[5]) == 0) break;
-            }
-            break;
-        }
-    }
-
     lastish.VirtualAddress =
             getval(fr, dd, SEEK_SET, lastish_offset + 12);
     lastish.SizeOfRawData = getval(fr, dd, SEEK_SET, lastish_offset + 16);
@@ -468,8 +408,8 @@ int main(int argc, char *argv[]) {
     write_instruction(fr, 0xffd0); // eax holds mem addr of MessageBoxA
 
     // Invoke MessageBoxA
-    // push 1030h (Type)
-    instruct(fr, 0x68, MB_OK | MB_ICONWARNING | MB_SYSTEMMODAL, dd);
+    // push 2030h (Type)
+    instruct(fr, 0x68, MB_OK | MB_ICONWARNING | MB_TASKMODAL, dd);
     // mov edx, [ebp + Inject] ; Also address of data[0]
     instruct(fr, 0x8b55, mem_stack.Inject, db);
     // push edx ("Notice")

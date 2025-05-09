@@ -1,0 +1,107 @@
+call   0x5
+push   eax
+push   ecx
+push   edx
+push   ebx
+push   esi
+push   edi
+push   ebp
+mov    ebp,esp
+sub    esp,0x20
+mov    eax,DWORD PTR [ebp+0x1c]
+sub    eax,0x75057
+mov    DWORD PTR [ebp-0x4],eax
+add    eax,0x14c0
+mov    DWORD PTR [ebp-0x8],eax
+mov    eax,DWORD PTR [ebp-0x4]
+add    eax,0x75000
+mov    DWORD PTR [ebp-0xc],eax
+mov    ebx,DWORD PTR fs:0x30
+mov    ebx,DWORD PTR [ebx+0xc]
+mov    ebx,DWORD PTR [ebx+0x14]
+mov    ebx,DWORD PTR [ebx]
+mov    ebx,DWORD PTR [ebx]
+mov    ebx,DWORD PTR [ebx+0x10]
+mov    DWORD PTR [ebp-0x10],ebx
+mov    eax,DWORD PTR [ebx+0x3c]
+add    eax,ebx
+mov    eax,DWORD PTR [eax+0x78]
+add    eax,ebx
+mov    ecx,DWORD PTR [eax+0x24]
+add    ecx,ebx
+mov    DWORD PTR [ebp-0x14],ecx
+mov    edi,DWORD PTR [eax+0x20]
+add    edi,ebx
+mov    DWORD PTR [ebp-0x18],edi
+mov    edx,DWORD PTR [eax+0x1c]
+add    edx,ebx
+mov    DWORD PTR [ebp-0x1c],edx
+mov    edx,DWORD PTR [eax+0x14]
+xor    eax,eax
+mov    edi,DWORD PTR [ebp-0x18]
+mov    edi,DWORD PTR [edi+eax*4]
+add    edi,ebx
+mov    esi,DWORD PTR [ebp-0xc]
+add    esi,0x1f
+xor    ecx,ecx
+cld
+add    cx,0xd
+repz cmps BYTE PTR ds:[esi],BYTE PTR es:[edi]
+je     0x98
+inc    eax
+cmp    eax,edx
+jb     0x6d
+jmp    0x112
+mov    ecx,DWORD PTR [ebp-0x14]
+mov    edx,DWORD PTR [ebp-0x1c]
+mov    ax,WORD PTR [ecx+eax*2]
+mov    eax,DWORD PTR [edx+eax*4]
+add    eax,ebx
+mov    esi,DWORD PTR [ebp-0xc]
+add    esi,0x3b
+push   esi
+call   eax
+mov    DWORD PTR [ebp-0x20],eax
+mov    ecx,DWORD PTR [ebp-0x14]
+mov    edx,DWORD PTR [ebp-0x1c]
+xor    eax,eax
+mov    edi,DWORD PTR [ebp-0x18]
+mov    edi,DWORD PTR [edi+eax*4]
+add    edi,ebx
+mov    esi,DWORD PTR [ebp-0xc]
+add    esi,0x2c
+xor    ecx,ecx
+cld
+add    cx,0xf
+repz cmps BYTE PTR ds:[esi],BYTE PTR es:[edi]
+je     0xe6
+inc    eax
+cmp    eax,edx
+jb     0xbb
+jmp    0x112
+mov    ecx,DWORD PTR [ebp-0x14]
+mov    edx,DWORD PTR [ebp-0x1c]
+mov    ax,WORD PTR [ecx+eax*2]
+mov    eax,DWORD PTR [edx+eax*4]
+add    eax,ebx
+mov    esi,DWORD PTR [ebp-0xc]
+add    esi,0x46
+push   esi
+push   DWORD PTR [ebp-0x20]
+call   eax
+push   0x1030
+mov    edx,DWORD PTR [ebp-0xc]
+push   edx
+add    edx,0x7
+push   edx
+push   0x0
+call   eax
+add    esp,0x20
+pop    ebp
+pop    edi
+pop    esi
+pop    ebx
+pop    edx
+pop    ecx
+pop    eax
+jmp    DWORD PTR [esp-0x24] 
