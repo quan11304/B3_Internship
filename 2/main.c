@@ -86,42 +86,41 @@ int main(int argc, char *argv[]) {
     imageOptionalHeader.DataDirectory[12].Size = getval(fr, dd, SEEK_SET,
                                                         ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 196 : 212));
 
-    // DWORD lastish_addr = ioh_addr + imageFileHeader.SizeOfOptionalHeader
-    // + 40 * (imageFileHeader.NumberOfSections-1);
     IMAGE_SECTION_HEADER lastish;
     lastish.PointerToRawData = 0;
-    DWORD lastish_offset = 0;
-    // File offset for Import Table and RVA of the containing section
-    DWORD import_offset, import_section_offset, import_section_rva = 0;
-    // File offset for IAT and RVA of the containing section
-    DWORD iat_offset, iat_section_offset, iat_section_rva = 0;
-    for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
-        DWORD current_rva = getval(fr, dd, SEEK_SET,
-                                   ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i + 12);
-        DWORD current_offset = getval(fr,dd, SEEK_SET,
-                                      ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i + 20);
-
-        // Find file offset of Import Table
-        if (current_rva > import_section_rva && current_rva <= imageOptionalHeader.DataDirectory[1].VirtualAddress) {
-            import_section_rva = current_rva;
-            import_section_offset = current_offset;
-            import_offset = imageOptionalHeader.DataDirectory[1].VirtualAddress - current_rva + current_offset;
-            // = imageOptionalHeader.DataDirectory[1].VirtualAddress - import_section_rva + import_section_offset;
-        }
-        if (current_rva > iat_section_rva && current_rva <= imageOptionalHeader.DataDirectory[12].VirtualAddress) {
-            iat_section_rva = current_rva;
-            iat_section_offset = current_offset;
-            iat_offset = imageOptionalHeader.DataDirectory[12].VirtualAddress - current_rva + current_offset;
-            // = imageOptionalHeader.DataDirectory[12].VirtualAddress - iat_section_rva + iat_section_offset;
-        }
-
-        // Find PointerToRawData of the last section
-        // Necessary? Not if section header is organised by the order of the sections' appearance in the programme
-        if (current_offset > lastish.PointerToRawData) {
-            lastish.PointerToRawData = current_offset;
-            lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i;
-        }
-    }
+    DWORD lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * (imageFileHeader.NumberOfSections-1);
+    
+    // // File offset for Import Table and RVA of the containing section
+    // DWORD import_offset, import_section_offset, import_section_rva = 0;
+    // // File offset for IAT and RVA of the containing section
+    // DWORD iat_offset, iat_section_offset, iat_section_rva = 0;
+    // for (int i = 0; i < imageFileHeader.NumberOfSections; i++) {
+    //     DWORD current_rva = getval(fr, dd, SEEK_SET,
+    //                                ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i + 12);
+    //     DWORD current_offset = getval(fr,dd, SEEK_SET,
+    //                                   ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i + 20);
+    //
+    //     // Find file offset of Import Table
+    //     if (current_rva > import_section_rva && current_rva <= imageOptionalHeader.DataDirectory[1].VirtualAddress) {
+    //         import_section_rva = current_rva;
+    //         import_section_offset = current_offset;
+    //         import_offset = imageOptionalHeader.DataDirectory[1].VirtualAddress - current_rva + current_offset;
+    //         // = imageOptionalHeader.DataDirectory[1].VirtualAddress - import_section_rva + import_section_offset;
+    //     }
+    //     if (current_rva > iat_section_rva && current_rva <= imageOptionalHeader.DataDirectory[12].VirtualAddress) {
+    //         iat_section_rva = current_rva;
+    //         iat_section_offset = current_offset;
+    //         iat_offset = imageOptionalHeader.DataDirectory[12].VirtualAddress - current_rva + current_offset;
+    //         // = imageOptionalHeader.DataDirectory[12].VirtualAddress - iat_section_rva + iat_section_offset;
+    //     }
+    //
+    //     Find PointerToRawData of the last section
+    //     Necessary? Not if section header is organised by the order of the sections' appearance in the programme
+    //     if (current_offset > lastish.PointerToRawData) {
+    //         lastish.PointerToRawData = current_offset;
+    //         lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * i;
+    //     }
+    // }
 
     lastish.VirtualAddress =
             getval(fr, dd, SEEK_SET, lastish_offset + 12);

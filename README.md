@@ -22,6 +22,6 @@
 2. **In Progress**
 - Add 64-bit code
 - Add a mechanism in case section header does not have space to inject: Move first section to last
-- Scan for an already in-place injection
 3. To-do
 - Loop to scan all files in a folder
+- Scan for an already in-place injection (will be part of an extra task)
