@@ -16,6 +16,11 @@ https://whitehat.vn/threads/co-che-lay-file-cua-virus-su-dung-ky-thuat-delta.352
 https://masm32.com/board/index.php?topic=11590.msg126106#msg126106
 https://en.wikipedia.org/wiki/Relocation_(computing)#32-bit_Windows
 
+## Malware definition
+(https://annas-archive.org/scidb/10.1145/2554850.2555157/)[_Malware and biological virus_]
+The art of computer virus research and defense
+(https://servicenow.iu.edu/kb?id=kb_article_view&sysparm_article=KB0023912)[Virus is a case of Trojan]
+(https://learn.microsoft.com/en-us/previous-versions/tn-archive/dd632948(v=technet.10)?redirectedfrom=MSDN)[Q&A about terminologies]
 
 ## Tools
 https://defuse.ca/online-x86-assembler.htm
