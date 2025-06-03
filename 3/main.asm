@@ -37,38 +37,39 @@ start:
     imul eax, regSz
     sub esp, eax
     
+    mov eax, [ebp] ; NewEntry + 1 + 4
+    sub eax, 5 ; eax = NewEntry
+    
+    
+    
     ; Find kernel32.dll
-    mov ebx, fs:0x30
-    mov ebx, [ebx + 0x0C]
-    mov ebx, [ebx + 0x14]
+    ASSUME FS:NOTHING
+    mov ebx, fs:30h
+    mov ebx, [ebx + 0Ch]
+    mov ebx, [ebx + 14h]
     mov ebx, [ebx]
     mov ebx, [ebx]
-    mov ebx, [ebx + 0x10]
+    mov ebx, [ebx + 10h]
 	toStack(kernel32dll, ebx) ; BaseAddress of kernel32.dll
     
-    mov edi, [ebx + 0x3C]
+    mov edi, [ebx + 3Ch]
     add edi, ebx
-    mov edi, [edi + 0x78] ; 24 (0x18) + 96 (0x60) = VA of kernel32.dll Export Table
+    mov edi, [edi + 78h] ; 24 (18h) + 96 (60h) = RVA of kernel32.dll Export Table
     add edi, ebx
-    mov ecx, [edi + 0x24]
+    mov ecx, [edi + 24h]
     add ecx, ebx
-    toStack(OrdinalTbl, ecx) ; RVA of Ordinal Table
+    toStack(OrdinalTbl, ecx) ; VA of Ordinal Table
     
-    mov esi, [edi + 0x20]
+    mov esi, [edi + 20h]
     add esi, ebx
-    toStack(NamePtrTbl, esi) ; RVA of Name Pointer Table
+    toStack(NamePtrTbl, esi) ; VA of Name Pointer Table
     
-    mov edx, [edi + 0x1C]
+    mov edx, [edi + 1Ch]
     add edx, ebx
-    toStack(AddrTbl, edx) ; RVA of Address Table
+    toStack(AddrTbl, edx) ; VA of Address Table
     
-    mov edx, [edi + 0x14]
+    mov edx, [edi + 14h]
     toStack(k32NumFunc, edx)
-    
-    
-    
-    
-    mov eax, [ebp + regSz] ; EntryPoint + 1 + 4
     
     
     invoke ExitProcess, 0

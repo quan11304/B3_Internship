@@ -4,7 +4,7 @@ toStack MACRO pos:REQ, value:REQ
 	mov eax, pos
     imul eax, regSz
     neg eax
-    mov [ebp + eax], value
+    mov [ebp + eax], value ; eax is expected to be a negative value
 ENDM
 
 fromStack MACRO pos:REQ, reg:REQ
