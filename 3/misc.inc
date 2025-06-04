@@ -24,7 +24,7 @@ k32import MACRO pFunc:REQ
 	mov esi, pFunc
 	cld ; DF = 0, ESI and EDI increments
 	xor ecx, ecx
-	add ecx, len(offset strCFA)
+	add ecx, len(pFunc)
 	cld
 	repe cmpsb
 	jz found
@@ -33,7 +33,7 @@ k32import MACRO pFunc:REQ
 	cmp eax, edx
 	jb loopback
 	
-	jmp entry
+	jmp old_entry
 	
 	found:
 	mov ecx, [ebp + OrdinalTbl]
