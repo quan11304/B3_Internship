@@ -1,14 +1,14 @@
 include \Masm32\include\masm32rt.inc
 
-toStack MACRO pos:REQ, value:REQ
+toStack MACRO pos:REQ, value:=<eax>
 	push value
-	mov edx, pos
-    imul edx, 4
-    neg edx
-    pop [ebp + edx] ; edx is expected to be a negative value
+	mov eax, pos
+    imul eax, 4
+    neg eax
+    pop [ebp + eax] ; eax is expected to be a negative value
 ENDM
-; edx will NOT be reserved after MACRO
-; edx can be used as input value
+; eax will NOT be reserved after MACRO
+; eax can be used as input value
 
 fromStack MACRO pos:REQ, reg:REQ
 	mov reg, pos

