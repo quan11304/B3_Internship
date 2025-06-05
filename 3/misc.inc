@@ -11,16 +11,15 @@ ENDM
 ; edx can be used as input value
 
 fromStack MACRO pos:REQ, reg:REQ
-	mov edx, pos
-	imul edx, regSz
-	neg edx
-	mov reg, [ebp + edx]
+	mov reg, pos
+	imul reg, regSz
+	neg reg
+	mov reg, [ebp + reg]
 ENDM
-; edx will NOT be reserved after MACRO
-; edx can be used to store return value
 
 k32import MACRO pFunc:REQ
 	; Input the offset to a string that is the name of the queried function
+	fromStack kernel32dll, ebx
 	fromStack k32NumFunc, edx
 	xor eax, eax
 	
