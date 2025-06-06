@@ -12,6 +12,15 @@ fromStack MACRO pos:REQ
 	EXITM <[ebp+temp]>
 ENDM
 
+; MACRO for accessing data regions
+; selfSection required
+daccess MACRO pStr:REQ
+	LOCAL address
+	address = pStr - data_start + fromStack(selfSection)
+	EXITM <address>
+ENDM
+	
+
 k32import MACRO pFunc:REQ
 	; Input the offset to a string that is the name of the queried function
 	mov ebx, fromStack(kernel32dll)
@@ -22,7 +31,7 @@ k32import MACRO pFunc:REQ
 		mov edi, fromStack(NamePtrTbl)
 		mov edi, [edi + eax*4]
 		add edi, ebx
-		mov esi, pFunc
+		mov esi, daccess(pFunc)
 		cld ; DF = 0, ESI and EDI increments
 		xor ecx, ecx
 		add ecx, len(pFunc)

