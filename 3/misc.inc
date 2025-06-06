@@ -1,30 +1,25 @@
 include \Masm32\include\masm32rt.inc
 
 toStack MACRO pos:REQ, value:=<eax>
-	push value
-	mov eax, pos
-    imul eax, 4
-    neg eax
-    pop [ebp + eax] ; eax is expected to be a negative value
+	LOCAL temp
+	temp = - pos * regSz
+    mov [ebp + temp], value
 ENDM
-; eax will NOT be reserved after MACRO
-; eax can be used as input value
 
-fromStack MACRO pos:REQ, reg:REQ
-	mov reg, pos
-	imul reg, regSz
-	neg reg
-	mov reg, [ebp + reg]
+fromStack MACRO pos:REQ
+	LOCAL temp
+	temp = - pos * regSz
+	EXITM <[ebp+temp]>
 ENDM
 
 k32import MACRO pFunc:REQ
 	; Input the offset to a string that is the name of the queried function
-	fromStack kernel32dll, ebx
-	fromStack k32NumFunc, edx
+	mov ebx, fromStack(kernel32dll)
+	mov edx, fromStack(k32NumFunc)
 	xor eax, eax
 	
 	loopback:
-		fromStack NamePtrTbl, edi
+		mov edi, fromStack(NamePtrTbl)
 		mov edi, [edi + eax*4]
 		add edi, ebx
 		mov esi, pFunc
@@ -42,11 +37,11 @@ k32import MACRO pFunc:REQ
 	jmp old_entry
 	
 	found:
-	fromStack OrdinalTbl, edx
+	mov edx, fromStack(OrdinalTbl)
 	mov ax, [edx + eax * 2]
-	fromStack AddrTbl, edx
+	mov edx, fromStack(AddrTbl)
 	mov eax, [edx + eax * 4]
-	fromStack kernel32dll, edx
+	mov edx, fromStack(kernel32dll)
 	add eax, edx
 	; eax now hold mem addr of function pointed to by pFunc
 ENDM
