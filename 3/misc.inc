@@ -1,15 +1,17 @@
 include \Masm32\include\masm32rt.inc
 
-toStack MACRO pos:REQ, value:=<eax>
+stackAddr MACRO pos:REQ
 	LOCAL temp
 	temp = - pos * regSz
-    mov [ebp + temp], value
+	EXITM <temp>
+ENDM
+
+toStack MACRO pos:REQ, value:=<eax>
+    mov [ebp + stackAddr(pos)], value
 ENDM
 
 fromStack MACRO pos:REQ
-	LOCAL temp
-	temp = - pos * regSz
-	EXITM <[ebp+temp]>
+	EXITM <[ebp + stackAddr(pos)]>
 ENDM
 
 ; MACRO for accessing data regions
