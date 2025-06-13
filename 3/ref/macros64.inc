@@ -669,7 +669,7 @@
       flag = 0
 
       ch1 SUBSTR <txt>,1,1              ;; check if 1st character is a quote
-      IFDIF ch1,<">
+      IFDIF ch1,<">						;"
         EXITM <txt>                     ;; exit with original "txt" if it is not
       ENDIF
 
