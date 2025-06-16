@@ -23,6 +23,9 @@
 - Add 64-bit code
 - Add a mechanism in case section header does not have space to inject: Move first section to last
 3. **In Progress**
+- Add a new section header (newish)
+- Reorder all stack variables
+- Revalidate run-time operators that should've been compile time operators
 - Check for errors (file opening, file reading, file pointer set, etc.)
 - Loop to scan all files in a folder (FindNextFile at the end of loop)
 - Scan for an already in-place injection (will be part of an extra task)
