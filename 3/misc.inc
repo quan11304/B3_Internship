@@ -135,7 +135,7 @@ getval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
 ;	ELSE
 ;		storage = daccess(offset tempDword)
 ;	ENDIF
-	mov vaccess(offset tempDword), 0
+	mov daccess(offset tempDword), 0
 	
 	invoke fromStack(fseek), handle, disp, 0, whence
 	
