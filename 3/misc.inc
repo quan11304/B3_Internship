@@ -16,8 +16,6 @@ option casemap: none
 	selfPointerToRawData EQU 5
 	
 	tgHand EQU 5
-	tgImageBaseAddress EQU 1
-    tgNewSection EQU 3
 	tgNewEntry EQU 4
 	lfanew EQU 5
 	NumberOfSections EQU 6 ; Before injection
