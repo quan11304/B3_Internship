@@ -28,9 +28,6 @@ option casemap: none
 	SectionAlignment EQU 11
 	FileAlignment EQU 12
 	lastish_offset EQU 14
-	lastish_SectionOffset EQU 13
-	lastish_VA EQU 15
-	lastish_SizeOfRawData EQU 16
 	newish_offset EQU 17
 	
 	
@@ -145,7 +142,7 @@ getval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
 	push daccess(offset tempDword)
 	push handle
 	call fromStack(fread)
-	; Retrieved value is stored in tempDword, depending on length
+	; Retrieved value is stored in tempDword
 ENDM
 
 setval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
