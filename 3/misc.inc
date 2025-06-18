@@ -12,7 +12,7 @@ option casemap: none
 	selfSection EQU 2
 	selfEntry EQU 3
 	selfHand EQU 4
-	selfSizeOfRawData EQU 5
+	selfVirtualSize EQU 5
 	selfPointerToRawData EQU 5
 	
 	tgHand EQU 5
@@ -112,7 +112,7 @@ k32import MACRO pFunc:REQ
 		cmp eax, edx
 	jb loopback
 	
-	jmp old_entry
+	jmp to_exit
 	
 	found:
 	mov edx, fromStack(OrdinalTbl)

