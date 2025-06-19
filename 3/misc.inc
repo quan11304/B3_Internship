@@ -143,22 +143,6 @@ getval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
 	; Retrieved value is stored in tempDword
 ENDM
 
-setval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
-	; handle MUST be obtained from stack beforehand
-;	LOCAL storage
-;	IF length EQ 1
-;		storage = daccess(offset tempByte)
-;	ELSEIF length EQ 2
-;		storage = daccess(offset tempWord)
-;	ELSE
-;		storage = daccess(offset tempDword)
-;	ENDIF
-	
-	invoke fromStack(fseek), handle, disp, 0, whence
-	
-	invoke fromStack(fwrite), handle, daccess(tempDword), length, daccess(tempDword2), 0
-ENDM
-
 closest MACRO actual:=<eax>, alignment:=<ebx>
 	mov eax, actual
 	xor edx, edx
