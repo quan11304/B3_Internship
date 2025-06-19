@@ -23,7 +23,6 @@
 - Add 64-bit code
 - Add a mechanism in case section header does not have space to inject: Move first section to last
 3. **In Progress**
-- Edit in old_entry for each individual executable
 - Reorder all stack variables
 - Revalidate run-time operators that should've been compile time operators (Use registers in daccess macro, with a default register parameter)
 - Check for errors (file opening, file reading, file pointer set, etc.)
