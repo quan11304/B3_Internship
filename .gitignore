@@ -1,6 +1,7 @@
 CMakeLists.txt
 cmake-build-debug/
 
+*.obj
 *.exe
 test*
 !2/analysis/*
