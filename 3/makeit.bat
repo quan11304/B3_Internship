@@ -19,7 +19,7 @@ dir %FullPath%.*
 
 echo ==============================================
 
-%FullPath%.exe
+rem %FullPath%.exe
 
 pause
 

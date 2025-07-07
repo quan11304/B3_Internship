@@ -3,6 +3,9 @@
 .386
 .model flat, stdcall
 option casemap: none
+include \masm32\include\windows.inc 
+include \masm32\include\kernel32.inc 
+includelib \masm32\lib\kernel32.lib 
 
 ; .const
 	; Order of each variable IN THE STACK

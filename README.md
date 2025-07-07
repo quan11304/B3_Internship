@@ -23,7 +23,6 @@
 - Add 64-bit code
 - Add a mechanism in case section header does not have space to inject: Move first section to last
 3. **In Progress**
-- Reorder all stack variables
-- Revalidate run-time operators that should've been compile time operators (Use registers in daccess macro, with a default register parameter)
+- Verify section header having enough space
+- Scan for an already in-place injection
 - Check for errors (file opening, file reading, file pointer set, etc.)
-- Scan for an already in-place injection (will be part of an extra task)
