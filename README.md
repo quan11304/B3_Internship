@@ -21,8 +21,6 @@
 1. _Done_
 2. _Done_ (basically)
 - Add 64-bit code
-- Add a mechanism in case section header does not have space to inject: Move first section to last
 3. **In Progress**
 - Verify section header having enough space
-- Scan for an already in-place injection
 - Check for errors (file opening, file reading, file pointer set, etc.)
